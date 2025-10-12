@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 
 #hyperparameters
-EPISODES_NUM = 10000
+EPISODES_NUM = 50000
 ALPHA = 0.1
 GAMMA = 0.9
 MIN_EPS = 0.01
@@ -54,14 +54,14 @@ def tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALP
             print(f"Episode {episode + 1} - Average Reward: {avg_reward:.2f}")
 
     with open(policy_file, "wb") as f:
-        pickle.dump(q_table, f)
+        pickle.dump(dict(q_table), f)
 
     return rewards_per_episode, epsilon_per_episode
 
 #run optimal policy
 def run_policy(env, policy_file):
     with open(policy_file, "rb") as f:
-        q = pickle.load(f)
+        q =  defaultdict(lambda: np.zeros(env.action_space.n),pickle.load(f))
     
     rewards = []
     for _ in range (EPISODES_NUM):
@@ -113,12 +113,12 @@ def plot_random_vs_greedy(random_rewards, greedy_rewards, epsilon):
     ax1.set_xlabel("Episode")
     ax1.set_ylabel("Average reward")
     ax1.grid(True)
-    ax1.legend(loc='upper-left')
+    ax1.legend(loc='upper left')
 
     ax2 = ax1.twinx()
     ax2.plot(epsilon, label = "Epsilon", color = 'green', linestyle='--')
     ax2.set_ylabel("Epsilon")
-    ax2.legend(loc='upper-right')
+    ax2.legend(loc='upper right')
 
     plt.title("Learning trend")
 
@@ -134,7 +134,7 @@ def plot_per_policy(rewards, policy):
     plt.ylabel('Reward')
     plt.axhline(y = mean_rewards, color ='red', label = f'Rewards Mean = {mean_rewards:.2f}')
     plt.grid(True)
-    plt.legend(loc='upper-left')
+    plt.legend(loc='upper left')
     plt.show()
 
 def plot_hypeparameters(res1, res2, res3):
@@ -155,7 +155,7 @@ def plot_hypeparameters(res1, res2, res3):
 
     plt.grid(axis='y')
 
-    plt.legend(loc='upper-left')
+    plt.legend(loc='upper left')
     
     
     plt.show()
@@ -163,7 +163,7 @@ def plot_hypeparameters(res1, res2, res3):
 if __name__ == "__main__":
     env = gym.make('Blackjack-v1', natural=False, sab=False)
 
-    mode = input("Choose the modality : 0 = training, 1 = running policy, 2 = tuning with different hyperparameters").strip()
+    mode = input("Choose the modality : 0 = training, 1 = running policy, 2 = tuning with different hyperparameters  ").strip()
     policy_file = input("File policy name (empty fot default): ").strip()
     if policy_file == "":
         policy_file = "default.pkl"
