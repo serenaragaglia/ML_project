@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 
 #hyperparameters
-EPISODES_NUM = 100000
+EPISODES_NUM = 50000
 ALPHA = 0.1
 GAMMA = 0.999
 MIN_EPS = 0.1
@@ -30,59 +30,35 @@ def tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALP
     rewards_per_episode = []
     epsilon_per_episode = []
 
-    wins = []
-    losses = []
-
-    win_rate_tot = []
-    loss_rate_tot = []
-
     for episode in range(episodes_num):
         state, _ = env.reset()
         finished = False 
         total_reward = 0
 
-        while not finished:
+        while not finished:            
             action = epsilon_greedy(state, epsilon, q_table, env)
 
-            next_state, reward, terminated, truncated, _ = env.step(action)
+            next_state, reward, terminated, truncated, _ = env.step(action)        
             finished = terminated or truncated            
 
             best_action = np.argmax(q_table[next_state])
-
-            if finished:
-                target = reward
-            else: 
-                target = reward + gamma * q_table[next_state][best_action]
-
-            q_table[state][action] += alpha * (target - q_table[state][action])
+            q_table[state][action] += alpha * (reward + gamma * q_table[next_state][best_action] - q_table[state][action])
 
             total_reward += reward
             state = next_state
         
         rewards_per_episode.append(total_reward)
-
-        if total_reward == 1:
-            wins.append(1)
-        elif total_reward == -1:
-            losses.append(-1)
-
         epsilon_per_episode.append(epsilon)
         epsilon = max(MIN_EPS, epsilon * eps_decay)
 
         if(episode + 1 ) % 100 == 0 : 
             avg_reward = np.mean(rewards_per_episode[-100:])
-            win_rate = np.mean([r == 1 for r in rewards_per_episode]) * 100
-            lose_rate = np.mean([r == -1 for r in rewards_per_episode]) * 100
-
-            win_rate_tot.append(win_rate)
-            loss_rate_tot.append(lose_rate)
-
             print(f"Episode {episode + 1} - Average Reward: {avg_reward:.2f}")
 
     with open(policy_file, "wb") as f:
         pickle.dump(dict(q_table), f)
 
-    return rewards_per_episode, epsilon_per_episode, win_rate_tot, loss_rate_tot
+    return rewards_per_episode, epsilon_per_episode
 
 #run optimal policy
 def run_policy(env, policy_file):
@@ -128,7 +104,7 @@ def random_episodes(env):
     return rewards
 
 def plot_random_vs_greedy(random_rewards, greedy_rewards, epsilon):
-    window = 1000
+    window = 500
     avg_greedy = np.convolve(greedy_rewards, np.ones(window)/window, mode='valid')
     avg_random = np.convolve(random_rewards, np.ones(window)/window, mode='valid') 
 
@@ -199,7 +175,7 @@ if __name__ == "__main__":
         policy_file = "default.pkl"
 
     if mode == "0":
-        rewards, epsilon, win, loss = tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALPHA, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0)
+        rewards, epsilon = tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALPHA, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0)
         ran_rewards = random_episodes(env)
         print(f"Greedy mean: {np.mean(rewards):.2f}")
         print(f"Random mean: {np.mean(ran_rewards):.2f}")
