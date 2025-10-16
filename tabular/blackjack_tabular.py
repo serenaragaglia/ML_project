@@ -6,11 +6,13 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 
 #hyperparameters
-EPISODES_NUM = 50000
+EPISODES_NUM = 500000
 ALPHA = 0.1
-GAMMA = 0.9
-MIN_EPS = 0.01
-EPS_DECAY = 0.999
+GAMMA = 1.0
+MIN_EPS = 0.05
+EPS_DECAY = 0.9995
+
+#https://gymnasium.farama.org/v0.26.3/tutorials/blackjack_tutorial/
 
 #epsilon greedy policy
 def epsilon_greedy(state, epsilon, q_table, env):
@@ -34,13 +36,17 @@ def tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALP
         total_reward = 0
 
         while not finished:
+            state = tuple(state)
             action = epsilon_greedy(state, epsilon, q_table, env)
 
             next_state, reward, terminated, truncated, _ = env.step(action)
+            next_state = tuple(next_state)
             finished = terminated or truncated            
 
             best_action = np.argmax(q_table[next_state])
-            q_table[state][action] += alpha * (reward + gamma * q_table[next_state][best_action] - q_table[state][action])
+            #print(f"S: {state}");
+            #print(f"T:  {q_table[state]}");
+            q_table[state][action] += alpha * (reward + (gamma * q_table[next_state][best_action]) - q_table[state][action])
 
             total_reward += reward
             state = next_state
@@ -102,7 +108,7 @@ def random_episodes(env):
     return rewards
 
 def plot_random_vs_greedy(random_rewards, greedy_rewards, epsilon):
-    window = 100
+    window = 500
     avg_greedy = np.convolve(greedy_rewards, np.ones(window)/window, mode='valid')
     avg_random = np.convolve(random_rewards, np.ones(window)/window, mode='valid') 
 
