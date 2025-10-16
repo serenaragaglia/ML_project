@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 
 #hyperparameters
-EPISODES_NUM = 100000
+EPISODES_NUM = 10000
 ALPHA = 0.1
 GAMMA = 0.999
 MIN_EPS = 0.1
@@ -77,7 +77,8 @@ def tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALP
             win_rate_tot.append(win_rate)
             loss_rate_tot.append(lose_rate)
 
-            print(f"Episode {episode + 1} - Average Reward: {avg_reward:.2f}")
+            print(f"Ep {episode+1:6d} | AvgReward: {avg_reward:+.3f} | "
+              f"WinRate: {win_rate:.1f}% | LoseRate: {lose_rate:.1f}% | Eps: {epsilon:.3f}")
 
     with open(policy_file, "wb") as f:
         pickle.dump(dict(q_table), f)
@@ -150,6 +151,22 @@ def plot_random_vs_greedy(random_rewards, greedy_rewards, epsilon):
     plt.tight_layout()
     plt.show()
 
+def plot_training_stats(win_rate_history, lose_rate_history, avg_reward_history, stats_every):
+    episodes = np.arange(stats_every, stats_every * len(win_rate_history) + 1, stats_every)
+
+    plt.figure(figsize=(12,6))
+    plt.plot(episodes, win_rate_history, label='Win Rate (%)', color='green', linewidth=2)
+    plt.plot(episodes, lose_rate_history, label='Lose Rate (%)', color='red', linewidth=2)
+    #plt.plot(episodes, avg_reward_history, label='Avg Reward', color='blue', linestyle='--')
+
+    plt.title("Training Performance (Q-learning)", fontsize=14, fontweight='bold')
+    plt.xlabel("Episodes", fontsize=12)
+    plt.ylabel("Percentage / Reward", fontsize=12)
+    plt.legend()
+    plt.grid(alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
 def plot_per_policy(rewards, policy):
     window = 500
     smoothed = np.convolve(rewards, np.ones(window)/window, mode='valid')
@@ -168,25 +185,24 @@ def plot_per_policy(rewards, policy):
     plt.show()
 
 def plot_hypeparameters(res1, res2, res3):
-    window = 100
-    plt.figure(figsize=(10,5))
+    window = 200  # finestra più grande per media mobile
+    step = 10     # campioniamo ogni 10 episodi per leggibilità
+    
+    # calcolo media mobile
+    avg1 = np.convolve(res1, np.ones(window)/window, mode='valid')[::step]
+    avg2 = np.convolve(res2, np.ones(window)/window, mode='valid')[::step]
+    avg3 = np.convolve(res3, np.ones(window)/window, mode='valid')[::step]
 
-    avg1 = np.convolve(res1, np.ones(window)/window, mode='valid' )
-    avg2 = np.convolve(res2, np.ones(window)/window, mode='valid' )
-    avg3 = np.convolve(res3, np.ones(window)/window, mode='valid' )
-
-    plt.plot(avg1, color = 'blue', label = "First")
-    plt.plot(avg2, color = 'orange', label = "Second")
-    plt.plot(avg3, color = 'pink', label = "Third")
+    plt.figure(figsize=(12,6))
+    plt.plot(avg1, color='blue', label="First", linewidth=2, alpha=0.8)
+    plt.plot(avg2, color='orange', label="Second", linewidth=2, alpha=0.8)
+    plt.plot(avg3, color='pink', label="Third", linewidth=2, alpha=0.8)
 
     plt.xlabel('Episodes')
     plt.ylabel('Rewards')
-    plt.title('Trend for different hyperameters')
-
-    plt.grid(axis='y')
-
+    plt.title('Trend for different hyperparameters')
+    plt.grid(axis='y', linestyle='--', alpha=0.5)
     plt.legend(loc='upper left')
-    
     
     plt.show()
     
@@ -201,18 +217,20 @@ if __name__ == "__main__":
     if mode == "0":
         rewards, epsilon, win, loss = tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALPHA, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0)
         ran_rewards = random_episodes(env)
+        avg_reward = np.mean(rewards)
         print(f"Greedy mean: {np.mean(rewards):.2f}")
         print(f"Random mean: {np.mean(ran_rewards):.2f}")
         plot_random_vs_greedy(ran_rewards, rewards, epsilon)
+        plot_training_stats(win, loss, avg_reward, 100)
     elif mode == "1":
         ran_rewards = random_episodes(env)
         greedy_rewards = run_policy(env, policy_file)
         plot_per_policy(ran_rewards, 'Random')
         plot_per_policy(greedy_rewards, 'Greedy')
     elif mode == "2":
-        r1, eps1 = tabular_qlearning(env, policy_file = ("tuning_first.pkl"), episodes_num = 10000, alpha=0.1, gamma= 0.99, eps_decay=0.995, epsilon=1.0)
-        r2, eps2 = tabular_qlearning(env, policy_file = ("tuning_second.pkl"), episodes_num = 10000, alpha=0.1, gamma= 0.9, eps_decay=0.99, epsilon=1.0)
-        r3, eps3 = tabular_qlearning(env, policy_file = ("tuning_third.pkl"), episodes_num = 10000, alpha=0.1, gamma= 0.9, eps_decay=0.9, epsilon=1.0)
+        r1, eps1, _, _ = tabular_qlearning(env, policy_file = ("tuning_first.pkl"), episodes_num = 10000, alpha=0.1, gamma= 0.99, eps_decay=0.995, epsilon=1.0)
+        r2, eps2, _, _ = tabular_qlearning(env, policy_file = ("tuning_second.pkl"), episodes_num = 10000, alpha=0.1, gamma= 0.9, eps_decay=0.99, epsilon=1.0)
+        r3, eps3, _, _ = tabular_qlearning(env, policy_file = ("tuning_third.pkl"), episodes_num = 10000, alpha=0.1, gamma= 0.9, eps_decay=0.9, epsilon=1.0)
         plot_hypeparameters(r1, r2, r3)
     else: print("Error")
 
