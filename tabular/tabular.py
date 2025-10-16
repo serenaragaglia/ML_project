@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 
 #hyperparameters
-EPISODES_NUM = 20000
+EPISODES_NUM = 50000
 ALPHA = 0.1
 GAMMA = 0.999
 MIN_EPS = 0.1
@@ -131,20 +131,16 @@ def plot_random_vs_greedy(random_rewards, greedy_rewards, epsilon):
     plt.show()
 
 def plot_per_policy(rewards, policy):
-    window = 500
-    smoothed = np.convolve(rewards, np.ones(window)/window, mode='valid')
-    std = np.std(rewards)
-    episodes = np.arange(len(smoothed))
+    episodes = range(len(rewards))
+    mean_rewards = np.mean(rewards)
 
-    plt.figure(figsize=(10,5))
-    plt.plot(episodes, smoothed, label=f'{policy} (moving avg)', color='royalblue')
-    plt.fill_between(episodes, smoothed-std, smoothed+std, color='blue', alpha=0.1)
-    plt.axhline(y=np.mean(rewards), color='red', linestyle='--', label=f'Mean: {np.mean(rewards):.2f}')
-    plt.title(f'Reward Trend - {policy}', fontsize=14, fontweight='bold')
-    plt.xlabel('Episode', fontsize=12)
-    plt.ylabel('Reward', fontsize=12)
-    plt.legend()
-    plt.grid(True, alpha=0.3)
+    plt.scatter(episodes, rewards)
+    plt.title(f"Reward per episode - {policy}")
+    plt.xlabel('Episode')
+    plt.ylabel('Reward')
+    plt.axhline(y = mean_rewards, color ='red', label = f'Rewards Mean = {mean_rewards:.2f}')
+    plt.grid(True)
+    plt.legend(loc='upper left')
     plt.show()
 
 def plot_hypeparameters(res1, res2, res3):
@@ -171,7 +167,14 @@ def plot_hypeparameters(res1, res2, res3):
     plt.show()
     
 if __name__ == "__main__":
-    env = gym.make('Blackjack-v1', natural=True, sab=False)
+    env = gym.make(
+                    'FrozenLake-v1',
+                    desc=None,
+                    map_name="4x4",
+                    is_slippery=True,
+                    success_rate=1.0/3.0,
+                    reward_schedule=(1, 0, 0)
+                )
 
     mode = input("Choose the modality : 0 = training, 1 = running policy, 2 = tuning with different hyperparameters  ").strip()
     policy_file = input("File policy name (empty fot default): ").strip()
