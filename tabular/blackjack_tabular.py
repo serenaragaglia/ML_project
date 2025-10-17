@@ -151,7 +151,7 @@ def plot_random_vs_greedy(random_rewards, greedy_rewards, epsilon):
     plt.tight_layout()
     plt.show()
 
-def plot_training_stats(win_rate_history, lose_rate_history, avg_reward_history, stats_every):
+def plot_training_stats(win_rate_history, lose_rate_history, stats_every):
     episodes = np.arange(stats_every, stats_every * len(win_rate_history) + 1, stats_every)
 
     plt.figure(figsize=(12,6))
@@ -185,18 +185,17 @@ def plot_per_policy(rewards, policy):
     plt.show()
 
 def plot_hypeparameters(res1, res2, res3):
-    window = 200  # finestra più grande per media mobile
-    step = 10     # campioniamo ogni 10 episodi per leggibilità
-    
-    # calcolo media mobile
+    window = 700 
+    step = 10  
+
     avg1 = np.convolve(res1, np.ones(window)/window, mode='valid')[::step]
     avg2 = np.convolve(res2, np.ones(window)/window, mode='valid')[::step]
     avg3 = np.convolve(res3, np.ones(window)/window, mode='valid')[::step]
 
     plt.figure(figsize=(12,6))
     plt.plot(avg1, color='blue', label="First", linewidth=2, alpha=0.8)
-    plt.plot(avg2, color='orange', label="Second", linewidth=2, alpha=0.8)
-    plt.plot(avg3, color='pink', label="Third", linewidth=2, alpha=0.8)
+    plt.plot(avg2, color='red', label="Second", linewidth=2, alpha=0.8)
+    plt.plot(avg3, color='yellow', label="Third", linewidth=2, alpha=0.8)
 
     plt.xlabel('Episodes')
     plt.ylabel('Rewards')
@@ -204,6 +203,27 @@ def plot_hypeparameters(res1, res2, res3):
     plt.grid(axis='y', linestyle='--', alpha=0.5)
     plt.legend(loc='upper left')
     
+    plt.show()
+
+def plot_hyperparameters_subplots(res1, res2, res3):
+    results = [res1, res2, res3]
+    titles = ['First', 'Second', 'Third']
+    colors = ['blue', 'red', 'gold']
+
+    window = 700
+    step = 10
+
+    fig, axes = plt.subplots(3, 1, figsize=(12,10), sharex=True)
+    for i, ax in enumerate(axes):
+        avg = np.convolve(results[i], np.ones(window)/window, mode='valid')[::step]
+        ax.plot(avg, color=colors[i], linewidth=2)
+        ax.set_title(f'{titles[i]} hyperparameters')
+        ax.grid(True, linestyle='--', alpha=0.5)
+        ax.set_ylabel('Reward')
+
+    axes[-1].set_xlabel('Episodes')
+    fig.suptitle('Reward trends per hyperparameter set', fontsize=14)
+    plt.tight_layout()
     plt.show()
     
 if __name__ == "__main__":
@@ -221,7 +241,7 @@ if __name__ == "__main__":
         print(f"Greedy mean: {np.mean(rewards):.2f}")
         print(f"Random mean: {np.mean(ran_rewards):.2f}")
         plot_random_vs_greedy(ran_rewards, rewards, epsilon)
-        plot_training_stats(win, loss, avg_reward, 100)
+        plot_training_stats(win, loss, 100)
     elif mode == "1":
         ran_rewards = random_episodes(env)
         greedy_rewards = run_policy(env, policy_file)
@@ -232,5 +252,6 @@ if __name__ == "__main__":
         r2, eps2, _, _ = tabular_qlearning(env, policy_file = ("tuning_second.pkl"), episodes_num = 10000, alpha=0.1, gamma= 0.9, eps_decay=0.99, epsilon=1.0)
         r3, eps3, _, _ = tabular_qlearning(env, policy_file = ("tuning_third.pkl"), episodes_num = 10000, alpha=0.1, gamma= 0.9, eps_decay=0.9, epsilon=1.0)
         plot_hypeparameters(r1, r2, r3)
+        plot_hyperparameters_subplots(r1, r2, r3)
     else: print("Error")
 
