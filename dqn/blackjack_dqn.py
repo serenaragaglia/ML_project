@@ -9,12 +9,19 @@ import torch.nn as nn
 import torch.optim as optim
 
 #hyperparameters
-EPISODES_NUM = 10000
+EPISODES_NUM = 50000
 ALPHA = 0.1
 GAMMA = 0.999
 MIN_EPS = 0.1
 EPS_DECAY = 0.9999
 
+
+def plot_rewards(r):
+    plt.plot(r)
+    plt.xlabel("Episode")
+    plt.ylabel("Reward")
+    plt.title("Reward per episodio - DQN Blackjack")
+    plt.show()
 
 class ReplayBuffer:
     def __init__(self, capacity):
@@ -28,6 +35,7 @@ class ReplayBuffer:
     
 class DQN(nn.Module):
     def __init__(self, state_dim, num_actions, device="cpu"):
+        super().__init__()
         self.device = device
         self.model = nn.Sequential(
             nn.Linear(state_dim, 64),
@@ -81,4 +89,52 @@ def update_model(s, a, r, next_state, done, batch, q_network : DQN):
 
     return training
 
+def train_blackjack(env, batch_size = 64):
+    state_dim = len(encode(env.reset()[0])) #number of values that compose the state, so its dimension
+    num_actions = env.action_space.n #number of actions: hit and stay
 
+    q_network = DQN(state_dim, num_actions, device = "cpu")
+    replay_buffer = ReplayBuffer(capacity=10000)
+
+    epsilon = 1.0
+    tot_rewards = []
+
+    for episode in range(EPISODES_NUM):
+        state, _ = env.reset()
+        finished = False
+        reward_per_ep = 0
+
+        while not finished:
+            action = next_action(state, env, epsilon, q_network)
+
+            next_state, reward, terminated, truncated, _ = env.step(action)
+            finished = terminated or truncated
+            reward_per_ep += reward
+
+            replay_buffer.add(state, action, reward, next_state, finished) #save inside replay buffer
+
+            if len(replay_buffer) >= batch_size:
+                batch = replay_buffer.sample(batch_size)
+                training_data = update_model(state, action, reward, next_state, finished, batch, q_network)
+                q_network.train(training_data)
+
+            state = next_state   
+
+        epsilon = epsilon_update(epsilon)
+        tot_rewards.append(reward_per_ep)
+
+        if (episode + 1)%100 == 0:
+            mean_reward = np.mean(tot_rewards[-100:])
+            print(f"Episode {episode+1} / {EPISODES_NUM}, Reward: {mean_reward:.2f}, Epsilon: {epsilon:.3f}")
+
+    return q_network, tot_rewards
+
+    
+if __name__ == "__main__":
+    env = gym.make('Blackjack-v1', natural=True, sab=False)
+    
+    q_net, rewards = train_blackjack(env)
+
+    torch.save(q_net.model.state_dict(), "blackjack_dqn.pth")
+    #plot_rewards(rewards)
+    print(f"Final Mean Reward: {np.mean(rewards):.2f}")
