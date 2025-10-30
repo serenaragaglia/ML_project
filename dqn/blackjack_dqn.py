@@ -47,7 +47,7 @@ class DQN(nn.Module):
     def train_on_batch(self, batch):
         states = torch.tensor(np.array([s for s, q in batch ]), dtype= torch.float32).to(self.device)  #conversion of states from vector to tensor
         q_target = torch.tensor(np.array([q for s, q in batch ]), dtype= torch.float32).to(self.device)  #conversion of target values from vector to tensor
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad()  #set to zero all prevoius gradients
         q_predictions = self.model(states) #forward pass: computes the network output from the batch
         loss = self.loss_fn(q_predictions, q_target)
         loss.backward()
@@ -55,7 +55,7 @@ class DQN(nn.Module):
         return loss.item()
     
     def predict_q_value(self, state):
-        state_input = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(self.device)
+        state_input = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(self.device) #add new dimension to tensor in position 0
         with torch.no_grad():
             q_values = self.model(state_input)
         return q_values.cpu().numpy()
@@ -96,7 +96,7 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
     num_actions = env.action_space.n #number of actions: hit and stay
 
     q_network = DQN(state_dim, num_actions, device = "cpu")
-    replay_buffer = ReplayBuffer(capacity=10000)
+    replay_buffer = ReplayBuffer(capacity=20000)
 
     epsilon_per_episode = []
     tot_rewards = []
@@ -244,12 +244,12 @@ def plot_policy_reward(rewards, epsilons):
     ax1.axhline(y=np.mean(rewards), color='red', linestyle='--', label=f'Mean Reward ({np.mean(rewards):.2f})')
     ax1.set_xlabel('Episode', fontsize=12)
     ax1.set_ylabel('Reward', fontsize=12)
-    ax1.tick_params(axis='y', labelcolor='royalblue')
+    ax1.tick_params(axis='y', labelcolor='black')
 
     ax2 = ax1.twinx()
     ax2.plot(np.arange(len(epsilons)), epsilons, color='darkorange', label='Epsilon (Exploration)', linestyle='--')
     ax2.set_ylabel('Epsilon', fontsize=12)
-    ax2.tick_params(axis='y', labelcolor='darkorange')
+    ax2.tick_params(axis='y', labelcolor='black')
 
     fig.suptitle('Learning Progress & Epsilon Decay', fontsize=14, fontweight='bold')
     fig.legend(loc='upper right', bbox_to_anchor=(0.9, 0.9))
@@ -301,6 +301,47 @@ def plot_per_policy(rewards, policy):
     plt.grid(True, alpha=0.3)
     plt.show()
 
+def plot_hypeparameters(res1, res2, res3):
+    step = 10  
+
+    avg1 = np.convolve(res1, np.ones(window)/window, mode='valid')[::step]
+    avg2 = np.convolve(res2, np.ones(window)/window, mode='valid')[::step]
+    avg3 = np.convolve(res3, np.ones(window)/window, mode='valid')[::step]
+
+    plt.figure(figsize=(12,6))
+    plt.plot(avg1, color='royalblue', label="First", linewidth=2, alpha=0.8)
+    plt.plot(avg2, color='red', label="Second", linewidth=2, alpha=0.8)
+    plt.plot(avg3, color='lime', label="Third", linewidth=2, alpha=0.8)
+
+    plt.xlabel('Episodes')
+    plt.ylabel('Rewards')
+    plt.title('Trend for different hyperparameters')
+    plt.grid(axis='y', linestyle='--', alpha=0.5)
+    plt.legend(loc='upper left')
+    
+    plt.show()
+
+def plot_hyperparameters_subplots(res1, res2, res3):
+    results = [res1, res2, res3]
+    titles = ['First', 'Second', 'Third']
+    colors = ['royalblue', 'red', 'lime']
+
+    step = 10
+
+    fig, axes = plt.subplots(3, 1, figsize=(12,10), sharex=True)
+    for i, ax in enumerate(axes):
+        avg = np.convolve(results[i], np.ones(window)/window, mode='valid')[::step]
+        ax.plot(avg, color=colors[i], linewidth=2)
+        ax.set_title(f'{titles[i]} hyperparameters')
+        ax.grid(True, linestyle='--', alpha=0.5)
+        ax.set_ylabel('Reward')
+
+    axes[-1].set_xlabel('Episodes')
+    fig.suptitle('Reward trends per hyperparameter set', fontsize=14)
+    plt.tight_layout()
+    plt.show()
+
+
 if __name__ == "__main__":
     env = gym.make('Blackjack-v1', natural=True, sab=False)
 
@@ -333,12 +374,12 @@ if __name__ == "__main__":
         plot_per_policy(ran_rewards, 'Random')
         plot_per_policy(greedy_rewards, 'Greedy')
     elif mode == "2":
-        q1, r1, eps1, l1, _, _ = train_blackjack(env, episodes_num = 10000, gamma= 0.99, eps_decay=0.995, epsilon=1.0, batch_size=32)
+        q1, r1, eps1, l1, _, _ = train_blackjack(env, episodes_num = 25000, gamma= 0.999, eps_decay=0.9995, epsilon=1.0, batch_size=32)
         save_policy(q1, "first_tuning.pth")
-        q2, r2, eps2, l2, _, _ = train_blackjack(env,  episodes_num = 10000, gamma= 0.9, eps_decay=0.99, epsilon=1.0, batch_size=64)
+        q2, r2, eps2, l2, _, _ = train_blackjack(env,  episodes_num = 25000, gamma= 0.99, eps_decay=0.999, epsilon=1.0, batch_size=64)
         save_policy(q2, "second_tuning.pth")
-        q3, r3, eps3, l3, _, _ = train_blackjack(env, episodes_num = 10000,  gamma= 0.9, eps_decay=0.9, epsilon=1.0, batch_size=128)
+        q3, r3, eps3, l3, _, _ = train_blackjack(env, episodes_num = 25000,  gamma= 0.9, eps_decay=0.99, epsilon=1.0, batch_size=128)
         save_policy(q3, "third_tuning.pth")
-        #plot_hypeparameters(r1, r2, r3)
-        #plot_hyperparameters_subplots(r1, r2, r3)
+        plot_hypeparameters(r1, r2, r3)
+        plot_hyperparameters_subplots(r1, r2, r3)
     else: print("Error")
