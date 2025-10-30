@@ -11,7 +11,7 @@ import os
 #hyperparameters
 EPISODES_NUM = 25000
 ALPHA = 0.1
-GAMMA = 0.99
+GAMMA = 0.999
 MIN_EPS = 0.1
 EPS_DECAY = 0.9995
 

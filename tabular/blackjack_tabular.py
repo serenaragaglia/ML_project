@@ -7,9 +7,9 @@ from collections import defaultdict
 import os
 
 #hyperparameters
-EPISODES_NUM = 25000
+EPISODES_NUM = 100000
 ALPHA = 0.1
-GAMMA = 0.99
+GAMMA = 0.999
 MIN_EPS = 0.1
 EPS_DECAY = 0.9995
 
@@ -97,7 +97,7 @@ def save_policy(policy_file, q_table):
         pickle.dump(dict(q_table), f)
 
 def load_policy(env, policy_file):
-    directory = "policies"
+    directory = "tabular_policies"
     filepath = os.path.join(directory, policy_file)
 
     with open(filepath, "rb") as f:
@@ -176,13 +176,13 @@ def plot_policy_reward(rewards, epsilons):
     ax1.plot(episodes, smoothed_rewards, color='royalblue', label='Moving Avg Reward')
     ax1.axhline(y=np.mean(rewards), color='red', linestyle='--', label=f'Mean Reward ({np.mean(rewards):.2f})')
     ax1.set_xlabel('Episode', fontsize=12)
-    ax1.set_ylabel('Reward', color='royalblue', fontsize=12)
-    ax1.tick_params(axis='y', labelcolor='royalblue')
+    ax1.set_ylabel('Reward', color='black', fontsize=12)
+    ax1.tick_params(axis='y', labelcolor='black')
 
     ax2 = ax1.twinx()
     ax2.plot(np.arange(len(epsilons)), epsilons, color='darkorange', label='Epsilon (Exploration)', linestyle='--')
-    ax2.set_ylabel('Epsilon', color='darkorange', fontsize=12)
-    ax2.tick_params(axis='y', labelcolor='darkorange')
+    ax2.set_ylabel('Epsilon', color='black', fontsize=12)
+    ax2.tick_params(axis='y', labelcolor='black')
 
     fig.suptitle('Learning Progress & Epsilon Decay', fontsize=14, fontweight='bold')
     fig.legend(loc='upper right', bbox_to_anchor=(0.9, 0.9))
@@ -230,9 +230,9 @@ def plot_hypeparameters(res1, res2, res3):
     avg3 = np.convolve(res3, np.ones(window)/window, mode='valid')[::step]
 
     plt.figure(figsize=(12,6))
-    plt.plot(avg1, color='blue', label="First", linewidth=2, alpha=0.8)
+    plt.plot(avg1, color='royalblue', label="First", linewidth=2, alpha=0.8)
     plt.plot(avg2, color='red', label="Second", linewidth=2, alpha=0.8)
-    plt.plot(avg3, color='yellow', label="Third", linewidth=2, alpha=0.8)
+    plt.plot(avg3, color='lime', label="Third", linewidth=2, alpha=0.8)
 
     plt.xlabel('Episodes')
     plt.ylabel('Rewards')
@@ -245,7 +245,7 @@ def plot_hypeparameters(res1, res2, res3):
 def plot_hyperparameters_subplots(res1, res2, res3):
     results = [res1, res2, res3]
     titles = ['First', 'Second', 'Third']
-    colors = ['blue', 'red', 'gold']
+    colors = ['royalblue', 'red', 'lime']
 
     step = 10
 
@@ -266,7 +266,7 @@ if __name__ == "__main__":
     env = gym.make('Blackjack-v1', natural=True, sab=False)
 
     mode = input("Choose the modality : 0 = training, 1 = running policy, 2 = tuning with different hyperparameters  ").strip()
-    policy_file = input("File policy name (empty fot default): ").strip()
+    policy_file = input("File policy name (empty for default): ").strip()
     if policy_file == "":
         policy_file = "default.pkl"
 
@@ -285,9 +285,9 @@ if __name__ == "__main__":
         plot_per_policy(ran_rewards, 'Random')
         plot_per_policy(greedy_rewards, 'Greedy')
     elif mode == "2":
-        r1, eps1, _, _ = tabular_qlearning(env, policy_file = ("tuning_first.pkl"), episodes_num = 10000, alpha=0.1, gamma= 0.99, eps_decay=0.995, epsilon=1.0)
-        r2, eps2, _, _ = tabular_qlearning(env, policy_file = ("tuning_second.pkl"), episodes_num = 10000, alpha=0.1, gamma= 0.9, eps_decay=0.99, epsilon=1.0)
-        r3, eps3, _, _ = tabular_qlearning(env, policy_file = ("tuning_third.pkl"), episodes_num = 10000, alpha=0.1, gamma= 0.9, eps_decay=0.9, epsilon=1.0)
+        r1, eps1, _, _ = tabular_qlearning(env, policy_file = ("tuning_first.pkl"), episodes_num = 25000, alpha=0.1, gamma= 0.999, eps_decay=0.9995, epsilon=1.0)
+        r2, eps2, _, _ = tabular_qlearning(env, policy_file = ("tuning_second.pkl"), episodes_num = 25000, alpha=0.1, gamma= 0.99, eps_decay=0.999, epsilon=1.0)
+        r3, eps3, _, _ = tabular_qlearning(env, policy_file = ("tuning_third.pkl"), episodes_num = 25000, alpha=0.05, gamma= 0.9, eps_decay=0.99, epsilon=1.0)
         plot_hypeparameters(r1, r2, r3)
         plot_hyperparameters_subplots(r1, r2, r3)
     else: print("Error")
