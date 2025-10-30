@@ -4,15 +4,18 @@ import random
 import pickle
 import matplotlib.pyplot as plt
 from collections import defaultdict
+import os
 
 #hyperparameters
-EPISODES_NUM = 10000
+EPISODES_NUM = 25000
 ALPHA = 0.1
-GAMMA = 0.999
+GAMMA = 0.99
 MIN_EPS = 0.1
-EPS_DECAY = 0.9999
+EPS_DECAY = 0.9995
 
 #https://gymnasium.farama.org/v0.26.3/tutorials/blackjack_tutorial/
+
+window = 1000
 
 #epsilon greedy policy
 def epsilon_greedy(state, epsilon, q_table, env):
@@ -79,16 +82,30 @@ def tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALP
 
             print(f"Ep {episode+1:6d} | AvgReward: {avg_reward:+.3f} | "
               f"WinRate: {win_rate:.1f}% | LoseRate: {lose_rate:.1f}% | Eps: {epsilon:.3f}")
+     
+    save_policy(policy_file, q_table)
 
-    with open(policy_file, "wb") as f:
+    return np.array(rewards_per_episode), np.array(epsilon_per_episode), win_rate_tot, loss_rate_tot
+
+def save_policy(policy_file, q_table):
+    directory = "tabular_policies"
+    os.makedirs(directory, exist_ok=True)
+
+    filepath = os.path.join(directory, policy_file)
+
+    with open(filepath, "wb") as f:
         pickle.dump(dict(q_table), f)
 
-    return rewards_per_episode, epsilon_per_episode, win_rate_tot, loss_rate_tot
+def load_policy(env, policy_file):
+    directory = "policies"
+    filepath = os.path.join(directory, policy_file)
+
+    with open(filepath, "rb") as f:
+        return defaultdict(lambda: np.zeros(env.action_space.n),pickle.load(f))
 
 #run optimal policy
 def run_policy(env, policy_file):
-    with open(policy_file, "rb") as f:
-        q =  defaultdict(lambda: np.zeros(env.action_space.n),pickle.load(f))
+    q = load_policy(env, policy_file)
     
     rewards = []
     for _ in range (EPISODES_NUM):
@@ -125,17 +142,15 @@ def random_episodes(env):
 
         rewards.append(tot_reward)
 
-    print(f"Average Reward for Random action: {np.mean(rewards):.2f}")
     return rewards
 
 def plot_random_vs_greedy(random_rewards, greedy_rewards, epsilon):
-    window = 1000
     avg_greedy = np.convolve(greedy_rewards, np.ones(window)/window, mode='valid')
     avg_random = np.convolve(random_rewards, np.ones(window)/window, mode='valid') 
 
     fig, ax1 = plt.subplots(figsize=(12,6))
-    ax1.plot(avg_greedy, label="Greedy (Q-learning)", color='royalblue', linewidth=2)
-    ax1.plot(avg_random, label="Random", color='darkorange', linestyle='--', linewidth=2)
+    ax1.plot(avg_greedy, label=f'Average Greedy (Q-learning) Reward', color='royalblue', linewidth=2)
+    ax1.plot(avg_random, label=f'Average Random Reward', color='darkorange', linestyle='--', linewidth=2)
 
     ax1.set_xlabel("Episode", fontsize=12)
     ax1.set_ylabel("Smoothed Average Reward", fontsize=12)
@@ -149,6 +164,30 @@ def plot_random_vs_greedy(random_rewards, greedy_rewards, epsilon):
     ax2.legend(loc='upper right')
 
     plt.tight_layout()
+    plt.show()
+
+def plot_policy_reward(rewards, epsilons):
+
+    smoothed_rewards = np.convolve(rewards, np.ones(window)/window, mode='valid')
+    episodes = np.arange(len(smoothed_rewards))
+
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+
+    ax1.plot(episodes, smoothed_rewards, color='royalblue', label='Moving Avg Reward')
+    ax1.axhline(y=np.mean(rewards), color='red', linestyle='--', label=f'Mean Reward ({np.mean(rewards):.2f})')
+    ax1.set_xlabel('Episode', fontsize=12)
+    ax1.set_ylabel('Reward', color='royalblue', fontsize=12)
+    ax1.tick_params(axis='y', labelcolor='royalblue')
+
+    ax2 = ax1.twinx()
+    ax2.plot(np.arange(len(epsilons)), epsilons, color='darkorange', label='Epsilon (Exploration)', linestyle='--')
+    ax2.set_ylabel('Epsilon', color='darkorange', fontsize=12)
+    ax2.tick_params(axis='y', labelcolor='darkorange')
+
+    fig.suptitle('Learning Progress & Epsilon Decay', fontsize=14, fontweight='bold')
+    fig.legend(loc='upper right', bbox_to_anchor=(0.9, 0.9))
+    fig.tight_layout()
+    plt.grid(alpha=0.3)
     plt.show()
 
 def plot_training_stats(win_rate_history, lose_rate_history, stats_every):
@@ -168,12 +207,11 @@ def plot_training_stats(win_rate_history, lose_rate_history, stats_every):
     plt.show()
 
 def plot_per_policy(rewards, policy):
-    window = 500
     smoothed = np.convolve(rewards, np.ones(window)/window, mode='valid')
     std = np.std(rewards)
     episodes = np.arange(len(smoothed))
 
-    plt.figure(figsize=(10,5))
+    plt.figure(figsize=(12,6))
     plt.plot(episodes, smoothed, label=f'{policy} (moving avg)', color='royalblue')
     plt.fill_between(episodes, smoothed-std, smoothed+std, color='blue', alpha=0.1)
     plt.axhline(y=np.mean(rewards), color='red', linestyle='--', label=f'Mean: {np.mean(rewards):.2f}')
@@ -185,7 +223,6 @@ def plot_per_policy(rewards, policy):
     plt.show()
 
 def plot_hypeparameters(res1, res2, res3):
-    window = 700 
     step = 10  
 
     avg1 = np.convolve(res1, np.ones(window)/window, mode='valid')[::step]
@@ -210,7 +247,6 @@ def plot_hyperparameters_subplots(res1, res2, res3):
     titles = ['First', 'Second', 'Third']
     colors = ['blue', 'red', 'gold']
 
-    window = 700
     step = 10
 
     fig, axes = plt.subplots(3, 1, figsize=(12,10), sharex=True)
@@ -242,6 +278,7 @@ if __name__ == "__main__":
         print(f"Random mean: {np.mean(ran_rewards):.2f}")
         plot_random_vs_greedy(ran_rewards, rewards, epsilon)
         plot_training_stats(win, loss, 100)
+        plot_policy_reward(rewards, epsilon)
     elif mode == "1":
         ran_rewards = random_episodes(env)
         greedy_rewards = run_policy(env, policy_file)
