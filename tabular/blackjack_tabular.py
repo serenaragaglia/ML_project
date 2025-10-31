@@ -242,26 +242,32 @@ def plot_hypeparameters(res1, res2, res3):
     
     plt.show()
 
-def plot_hyperparameters_subplots(res1, res2, res3):
+def plot_hyperparameters_subplots(res1, res2, res3, window=100):
     results = [res1, res2, res3]
     titles = ['First', 'Second', 'Third']
     colors = ['royalblue', 'red', 'lime']
-
     step = 10
 
-    fig, axes = plt.subplots(3, 1, figsize=(12,10), sharex=True)
+    fig, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+    
     for i, ax in enumerate(axes):
         avg = np.convolve(results[i], np.ones(window)/window, mode='valid')[::step]
-        ax.plot(avg, color=colors[i], linewidth=2)
+        mean_reward = np.mean(results[i])
+
+        # Linea del trend
+        ax.plot(avg, color=colors[i], linewidth=2, label='Smoothed Reward')
+        # Linea della media
+        ax.axhline(mean_reward, color='gray', linestyle='--', linewidth=1.5, label=f'Mean = {mean_reward:.2f}')
+        
         ax.set_title(f'{titles[i]} hyperparameters')
         ax.grid(True, linestyle='--', alpha=0.5)
         ax.set_ylabel('Reward')
+        ax.legend()
 
     axes[-1].set_xlabel('Episodes')
     fig.suptitle('Reward trends per hyperparameter set', fontsize=14)
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 1, 0.96])  # lascia spazio per il titolo
     plt.show()
-    
 if __name__ == "__main__":
     env = gym.make('Blackjack-v1', natural=True, sab=False)
 
