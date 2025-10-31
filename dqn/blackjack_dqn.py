@@ -9,7 +9,7 @@ import torch.optim as optim
 import os
 
 #hyperparameters
-EPISODES_NUM = 25000
+EPISODES_NUM = 100000
 ALPHA = 0.1
 GAMMA = 0.999
 MIN_EPS = 0.1
@@ -96,7 +96,7 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
     num_actions = env.action_space.n #number of actions: hit and stay
 
     q_network = DQN(state_dim, num_actions, device = "cpu")
-    replay_buffer = ReplayBuffer(capacity=20000)
+    replay_buffer = ReplayBuffer(capacity=10000)
 
     epsilon_per_episode = []
     tot_rewards = []
@@ -376,9 +376,9 @@ if __name__ == "__main__":
     elif mode == "2":
         q1, r1, eps1, l1, _, _ = train_blackjack(env, episodes_num = 25000, gamma= 0.999, eps_decay=0.9995, epsilon=1.0, batch_size=32)
         save_policy(q1, "first_tuning.pth")
-        q2, r2, eps2, l2, _, _ = train_blackjack(env,  episodes_num = 25000, gamma= 0.99, eps_decay=0.999, epsilon=1.0, batch_size=64)
+        q2, r2, eps2, l2, _, _ = train_blackjack(env,  episodes_num = 25000, gamma= 0.99, eps_decay=0.999, epsilon=1.0, batch_size=32)
         save_policy(q2, "second_tuning.pth")
-        q3, r3, eps3, l3, _, _ = train_blackjack(env, episodes_num = 25000,  gamma= 0.9, eps_decay=0.99, epsilon=1.0, batch_size=128)
+        q3, r3, eps3, l3, _, _ = train_blackjack(env, episodes_num = 25000,  gamma= 0.9, eps_decay=0.99, epsilon=1.0, batch_size=32)
         save_policy(q3, "third_tuning.pth")
         plot_hypeparameters(r1, r2, r3)
         plot_hyperparameters_subplots(r1, r2, r3)

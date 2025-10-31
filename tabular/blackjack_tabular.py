@@ -287,7 +287,7 @@ if __name__ == "__main__":
     elif mode == "2":
         r1, eps1, _, _ = tabular_qlearning(env, policy_file = ("tuning_first.pkl"), episodes_num = 25000, alpha=0.1, gamma= 0.999, eps_decay=0.9995, epsilon=1.0)
         r2, eps2, _, _ = tabular_qlearning(env, policy_file = ("tuning_second.pkl"), episodes_num = 25000, alpha=0.1, gamma= 0.99, eps_decay=0.999, epsilon=1.0)
-        r3, eps3, _, _ = tabular_qlearning(env, policy_file = ("tuning_third.pkl"), episodes_num = 25000, alpha=0.05, gamma= 0.9, eps_decay=0.99, epsilon=1.0)
+        r3, eps3, _, _ = tabular_qlearning(env, policy_file = ("tuning_third.pkl"), episodes_num = 25000, alpha=0.1, gamma= 0.9, eps_decay=0.99, epsilon=1.0)
         plot_hypeparameters(r1, r2, r3)
         plot_hyperparameters_subplots(r1, r2, r3)
     else: print("Error")
