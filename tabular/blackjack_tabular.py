@@ -7,11 +7,11 @@ from collections import defaultdict
 import os
 
 #hyperparameters
-EPISODES_NUM = 100000
+EPISODES_NUM = 30000
 ALPHA = 0.1
-GAMMA = 0.999
+GAMMA = 0.9
 MIN_EPS = 0.1
-EPS_DECAY = 0.9995
+EPS_DECAY = 0.9
 
 #https://gymnasium.farama.org/v0.26.3/tutorials/blackjack_tutorial/
 
@@ -281,6 +281,8 @@ if __name__ == "__main__":
         ran_rewards = random_episodes(env)
         avg_reward = np.mean(rewards)
         print(f"Greedy mean: {np.mean(rewards):.2f}")
+        print(f"Wins mean: {np.mean(win):.2f}")
+        print(f"Losses mean: {np.mean(loss):.2f}")
         print(f"Random mean: {np.mean(ran_rewards):.2f}")
         plot_random_vs_greedy(ran_rewards, rewards, epsilon)
         plot_training_stats(win, loss, 100)
@@ -291,9 +293,9 @@ if __name__ == "__main__":
         plot_per_policy(ran_rewards, 'Random')
         plot_per_policy(greedy_rewards, 'Greedy')
     elif mode == "2":
-        r1, eps1, _, _ = tabular_qlearning(env, policy_file = ("tuning_first.pkl"), episodes_num = 25000, alpha=0.1, gamma= 0.999, eps_decay=0.9995, epsilon=1.0)
-        r2, eps2, _, _ = tabular_qlearning(env, policy_file = ("tuning_second.pkl"), episodes_num = 25000, alpha=0.1, gamma= 0.99, eps_decay=0.999, epsilon=1.0)
-        r3, eps3, _, _ = tabular_qlearning(env, policy_file = ("tuning_third.pkl"), episodes_num = 25000, alpha=0.1, gamma= 0.9, eps_decay=0.99, epsilon=1.0)
+        r1, eps1, _, _ = tabular_qlearning(env, policy_file = ("tuning_first.pkl"), episodes_num = 30000, alpha=0.1, gamma= 0.999, eps_decay=0.9995, epsilon=1.0)
+        r2, eps2, _, _ = tabular_qlearning(env, policy_file = ("tuning_second.pkl"), episodes_num = 30000, alpha=0.1, gamma= 0.99, eps_decay=0.999, epsilon=1.0)
+        r3, eps3, _, _ = tabular_qlearning(env, policy_file = ("tuning_third.pkl"), episodes_num = 30000, alpha=0.1, gamma= 0.9, eps_decay=0.9, epsilon=1.0)
         plot_hypeparameters(r1, r2, r3)
         plot_hyperparameters_subplots(r1, r2, r3)
     else: print("Error")
