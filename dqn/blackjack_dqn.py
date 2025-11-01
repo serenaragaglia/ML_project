@@ -10,7 +10,7 @@ import os
 
 #hyperparameters
 EPISODES_NUM = 100000
-ALPHA = 0.1
+ALPHA = 0.001
 GAMMA = 0.999
 MIN_EPS = 0.1
 EPS_DECAY = 0.9995
@@ -374,11 +374,11 @@ if __name__ == "__main__":
         plot_per_policy(ran_rewards, 'Random')
         plot_per_policy(greedy_rewards, 'Greedy')
     elif mode == "2":
-        q1, r1, eps1, l1, _, _ = train_blackjack(env, episodes_num = 25000, gamma= 0.999, eps_decay=0.9995, epsilon=1.0, batch_size=32)
+        q1, r1, eps1, l1, _, _ = train_blackjack(env, episodes_num = 30000, gamma= 0.9999, eps_decay=0.9995, epsilon=1.0, batch_size=32)
         save_policy(q1, "first_tuning.pth")
-        q2, r2, eps2, l2, _, _ = train_blackjack(env,  episodes_num = 25000, gamma= 0.99, eps_decay=0.999, epsilon=1.0, batch_size=32)
+        q2, r2, eps2, l2, _, _ = train_blackjack(env,  episodes_num = 30000, gamma= 0.999, eps_decay=0.999, epsilon=1.0, batch_size=32)
         save_policy(q2, "second_tuning.pth")
-        q3, r3, eps3, l3, _, _ = train_blackjack(env, episodes_num = 25000,  gamma= 0.9, eps_decay=0.99, epsilon=1.0, batch_size=32)
+        q3, r3, eps3, l3, _, _ = train_blackjack(env, episodes_num = 30000,  gamma= 0.99, eps_decay=0.99, epsilon=1.0, batch_size=32)
         save_policy(q3, "third_tuning.pth")
         plot_hypeparameters(r1, r2, r3)
         plot_hyperparameters_subplots(r1, r2, r3)
