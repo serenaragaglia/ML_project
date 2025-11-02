@@ -7,11 +7,11 @@ from collections import defaultdict
 import os
 
 #hyperparameters
-EPISODES_NUM = 30000
-ALPHA = 0.1
-GAMMA = 0.9
-MIN_EPS = 0.1
-EPS_DECAY = 0.9
+EPISODES_NUM = 50000
+ALPHA = 0.05
+GAMMA = 0.999
+MIN_EPS = 0.05
+EPS_DECAY = 0.999
 
 #https://gymnasium.farama.org/v0.26.3/tutorials/blackjack_tutorial/
 
@@ -33,19 +33,21 @@ def tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALP
     rewards_per_episode = []
     epsilon_per_episode = []
 
-    wins = []
-    losses = []
-
     win_rate_tot = []
     loss_rate_tot = []
+    draw_rate_tot = []
+
+    actions_per_episode = []
 
     for episode in range(episodes_num):
         state, _ = env.reset()
         finished = False 
         total_reward = 0
+        actions = []
 
         while not finished:
             action = epsilon_greedy(state, epsilon, q_table, env)
+            actions.append(action)
 
             next_state, reward, terminated, truncated, _ = env.step(action)
             finished = terminated or truncated            
@@ -63,29 +65,27 @@ def tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALP
             state = next_state
         
         rewards_per_episode.append(total_reward)
-
-        if total_reward == 1:
-            wins.append(1)
-        elif total_reward == -1:
-            losses.append(-1)
+        actions_per_episode.append(actions)
 
         epsilon_per_episode.append(epsilon)
         epsilon = max(MIN_EPS, epsilon * eps_decay)
 
         if(episode + 1 ) % 100 == 0 : 
             avg_reward = np.mean(rewards_per_episode[-100:])
-            win_rate = np.mean([r == 1 for r in rewards_per_episode]) * 100
+            win_rate = np.mean([r > 0 for r in rewards_per_episode]) * 100 #we are in the natural envirnment so we can also have a reward of 1.5
             lose_rate = np.mean([r == -1 for r in rewards_per_episode]) * 100
+            draw_rate = np.mean([r == 0 for r in rewards_per_episode]) * 100
 
             win_rate_tot.append(win_rate)
             loss_rate_tot.append(lose_rate)
+            draw_rate_tot.append(draw_rate)
 
             print(f"Ep {episode+1:6d} | AvgReward: {avg_reward:+.3f} | "
-              f"WinRate: {win_rate:.1f}% | LoseRate: {lose_rate:.1f}% | Eps: {epsilon:.3f}")
+              f"WinRate: {win_rate:.1f}% | LoseRate: {lose_rate:.1f}% |  DrawRate: {draw_rate:.1f}%|  Eps: {epsilon:.3f}")
      
     save_policy(policy_file, q_table)
 
-    return np.array(rewards_per_episode), np.array(epsilon_per_episode), win_rate_tot, loss_rate_tot
+    return np.array(rewards_per_episode), np.array(epsilon_per_episode), win_rate_tot, loss_rate_tot, draw_rate_tot, actions_per_episode
 
 def save_policy(policy_file, q_table):
     directory = "tabular_policies"
@@ -106,43 +106,52 @@ def load_policy(env, policy_file):
 #run optimal policy
 def run_policy(env, policy_file):
     q = load_policy(env, policy_file)
-    
+
+    actions_per_ep = []
     rewards = []
+
     for _ in range (EPISODES_NUM):
         state, _ = env.reset()
         finished = False
         tot_reward = 0
+        actions = []
 
         while not finished:
             action = np.argmax(q[state])
+            actions.append(action)
             next_state, reward, terminated, truncated, _ = env.step(action)
             finished = terminated or truncated
             state = next_state
             tot_reward += reward
         
         rewards.append(tot_reward)
+        actions_per_ep.append(actions)
     print(f"Average Reward for optimal policy: {np.mean(rewards):.2f}")
 
-    return rewards
+    return rewards, actions_per_ep
 
 #pick random actions
 def random_episodes(env):
     rewards = []
+    actions_per_ep = []
     for _ in range (EPISODES_NUM):
         state, _ = env.reset()
         finished = False
         tot_reward = 0
+        actions = []
 
         while not finished:
             action = env.action_space.sample()
+            actions.append(action)
             next_state, reward, terminated, truncated, _ = env.step(action)
             finished = terminated or truncated
             state = next_state
             tot_reward += reward
 
         rewards.append(tot_reward)
+        actions_per_ep.append(actions)
 
-    return rewards
+    return rewards, actions_per_ep
 
 def plot_random_vs_greedy(random_rewards, greedy_rewards, epsilon):
     avg_greedy = np.convolve(greedy_rewards, np.ones(window)/window, mode='valid')
@@ -180,7 +189,7 @@ def plot_policy_reward(rewards, epsilons):
     ax1.tick_params(axis='y', labelcolor='black')
 
     ax2 = ax1.twinx()
-    ax2.plot(np.arange(len(epsilons)), epsilons, color='darkorange', label='Epsilon (Exploration)', linestyle='--')
+    ax2.plot(np.arange(len(epsilons)), epsilons, color='green', label='Epsilon (Exploration)', linestyle='--')
     ax2.set_ylabel('Epsilon', color='black', fontsize=12)
     ax2.tick_params(axis='y', labelcolor='black')
 
@@ -190,19 +199,19 @@ def plot_policy_reward(rewards, epsilons):
     plt.grid(alpha=0.3)
     plt.show()
 
-def plot_training_stats(win_rate_history, lose_rate_history, stats_every):
-    episodes = np.arange(stats_every, stats_every * len(win_rate_history) + 1, stats_every)
+def plot_training_stats(win_rate_history, lose_rate_history, draw_rate_history):
+    episodes = np.arange(len(win_rate_history)) * 100  
 
     plt.figure(figsize=(12,6))
-    plt.plot(episodes, win_rate_history, label='Win Rate (%)', color='green', linewidth=2)
-    plt.plot(episodes, lose_rate_history, label='Lose Rate (%)', color='red', linewidth=2)
-    #plt.plot(episodes, avg_reward_history, label='Avg Reward', color='blue', linestyle='--')
+    plt.plot(episodes, win_rate_history, label="Win rate", color="green", linewidth=2)
+    plt.plot(episodes, lose_rate_history, label="Loss rate", color="red", linewidth=2)
+    plt.plot(episodes, draw_rate_history, label="Draw rate",color="deepskyblue", linewidth=2)
 
-    plt.title("Training Performance (Q-learning)", fontsize=14, fontweight='bold')
+    plt.title("Evolution of games outcomes during training ", fontsize=14)
     plt.xlabel("Episodes", fontsize=12)
-    plt.ylabel("Percentage / Reward", fontsize=12)
-    plt.legend()
-    plt.grid(alpha=0.3)
+    plt.ylabel("Percentage (%)", fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend(fontsize=12)
     plt.tight_layout()
     plt.show()
 
@@ -220,6 +229,26 @@ def plot_per_policy(rewards, policy):
     plt.ylabel('Reward', fontsize=12)
     plt.legend()
     plt.grid(True, alpha=0.3)
+    plt.show()
+
+def plot_reward_action_trend(actions, policy):
+
+    hit_freq = [np.mean([1 if a==1 else 0 for a in ep]) for ep in actions]
+    stick_freq = [1 - h for h in hit_freq]
+    
+    hit_smooth = np.convolve(hit_freq, np.ones(window)/window, mode='valid')
+    stick_smooth = np.convolve(stick_freq, np.ones(window)/window, mode='valid')
+    
+    episodes = np.arange(len(hit_smooth))
+    
+    plt.figure(figsize=(12,6))
+    plt.bar(episodes, stick_smooth, color='orange', label='Stick (0)')
+    plt.bar(episodes, hit_smooth, bottom=stick_smooth, color='blue', label='Hit (1)')
+    
+    plt.xlabel('Episodes')
+    plt.ylabel('Distribution')
+    plt.title(f'Hit vs. Stick Action Distribution for the {policy}-policy')
+    plt.legend()
     plt.show()
 
 def plot_hypeparameters(res1, res2, res3):
@@ -242,21 +271,19 @@ def plot_hypeparameters(res1, res2, res3):
     
     plt.show()
 
-def plot_hyperparameters_subplots(res1, res2, res3, window=100):
+def plot_hyperparameters_subplots(res1, res2, res3):
     results = [res1, res2, res3]
     titles = ['First', 'Second', 'Third']
     colors = ['royalblue', 'red', 'lime']
     step = 10
 
-    fig, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+    fig, axes = plt.subplots(3, 1, figsize=(12, 6), sharex=True)
     
     for i, ax in enumerate(axes):
         avg = np.convolve(results[i], np.ones(window)/window, mode='valid')[::step]
         mean_reward = np.mean(results[i])
 
-        # Linea del trend
         ax.plot(avg, color=colors[i], linewidth=2, label='Smoothed Reward')
-        # Linea della media
         ax.axhline(mean_reward, color='gray', linestyle='--', linewidth=1.5, label=f'Mean = {mean_reward:.2f}')
         
         ax.set_title(f'{titles[i]} hyperparameters')
@@ -266,8 +293,9 @@ def plot_hyperparameters_subplots(res1, res2, res3, window=100):
 
     axes[-1].set_xlabel('Episodes')
     fig.suptitle('Reward trends per hyperparameter set', fontsize=14)
-    plt.tight_layout(rect=[0, 0, 1, 0.96])  # lascia spazio per il titolo
+    plt.tight_layout(rect=[0, 0, 1, 0.96]) 
     plt.show()
+
 if __name__ == "__main__":
     env = gym.make('Blackjack-v1', natural=True, sab=False)
 
@@ -277,25 +305,34 @@ if __name__ == "__main__":
         policy_file = "default.pkl"
 
     if mode == "0":
-        rewards, epsilon, win, loss = tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALPHA, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0)
+        rewards, epsilon, win, loss, draws = tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALPHA, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0)
+        
         ran_rewards = random_episodes(env)
         avg_reward = np.mean(rewards)
+
         print(f"Greedy mean: {np.mean(rewards):.2f}")
         print(f"Wins mean: {np.mean(win):.2f}")
+        print(f"Draws mean: {np.mean(draws):.2f}")
         print(f"Losses mean: {np.mean(loss):.2f}")
         print(f"Random mean: {np.mean(ran_rewards):.2f}")
+
         plot_random_vs_greedy(ran_rewards, rewards, epsilon)
-        plot_training_stats(win, loss, 100)
+        plot_training_stats(win, loss, draws)
         plot_policy_reward(rewards, epsilon)
+
     elif mode == "1":
-        ran_rewards = random_episodes(env)
-        greedy_rewards = run_policy(env, policy_file)
-        plot_per_policy(ran_rewards, 'Random')
-        plot_per_policy(greedy_rewards, 'Greedy')
+        ran_rewards, ran_actions = random_episodes(env)
+        greedy_rewards, optimal_actions = run_policy(env, policy_file)
+
+        #plot_per_policy(ran_rewards, 'Random')
+        #plot_per_policy(greedy_rewards, 'Greedy')
+
+        plot_reward_action_trend(ran_rewards, ran_actions, 'Random')
+        plot_reward_action_trend(greedy_rewards, optimal_actions,'Greedy')
     elif mode == "2":
-        r1, eps1, _, _ = tabular_qlearning(env, policy_file = ("tuning_first.pkl"), episodes_num = 30000, alpha=0.1, gamma= 0.999, eps_decay=0.9995, epsilon=1.0)
-        r2, eps2, _, _ = tabular_qlearning(env, policy_file = ("tuning_second.pkl"), episodes_num = 30000, alpha=0.1, gamma= 0.99, eps_decay=0.999, epsilon=1.0)
-        r3, eps3, _, _ = tabular_qlearning(env, policy_file = ("tuning_third.pkl"), episodes_num = 30000, alpha=0.1, gamma= 0.9, eps_decay=0.9, epsilon=1.0)
+        r1, eps1, _, _, _ = tabular_qlearning(env, policy_file = ("tuning_first.pkl"), episodes_num = 30000, alpha=0.05, gamma= 0.9999, eps_decay=0.9995, epsilon=1.0)
+        r2, eps2, _, _, _ = tabular_qlearning(env, policy_file = ("tuning_second.pkl"), episodes_num = 30000, alpha=0.05, gamma= 0.999, eps_decay=0.999, epsilon=1.0)
+        r3, eps3, _, _, _ = tabular_qlearning(env, policy_file = ("tuning_third.pkl"), episodes_num = 30000, alpha=0.05, gamma= 0.99, eps_decay=0.9995, epsilon=1.0)
         plot_hypeparameters(r1, r2, r3)
         plot_hyperparameters_subplots(r1, r2, r3)
     else: print("Error")

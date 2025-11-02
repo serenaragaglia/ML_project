@@ -1,0 +1,9 @@
+we could also save the temporal difference, qhich is the error between the target and the actual result, as:
+temporal_difference = (
+            reward + self.discount_factor * future_q_value - self.q_values[obs][action]
+        )
+
+decrease learning rate to make the training more stable, because if it's too high in the dqn, it means that weghts fluctutate too much and the net can't remember what
+it already learned, because we are taking from the actual q-value the product between the learning rate and the gradient    
+
+fix gamma and decrease decay epsilon

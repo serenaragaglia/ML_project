@@ -9,11 +9,11 @@ import torch.optim as optim
 import os
 
 #hyperparameters
-EPISODES_NUM = 100000
+EPISODES_NUM = 50000
 ALPHA = 0.001
 GAMMA = 0.999
-MIN_EPS = 0.1
-EPS_DECAY = 0.9995
+MIN_EPS = 0.05
+EPS_DECAY = 0.999
 
 window = 1000
 
@@ -102,11 +102,9 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
     tot_rewards = []
     tot_loss = []
 
-    wins = []
-    losses = []
-
     win_rate_tot= []
     loss_rate_tot = []
+    draw_rate_tot = []
 
     for episode in range(episodes_num):
         state, _ = env.reset()
@@ -131,31 +129,28 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
 
             state = next_state   
 
-        if reward_per_ep == 1:
-            wins.append(1)
-        elif reward_per_ep == -1:
-            losses.append(-1)
-
         epsilon_per_episode.append(epsilon)
         epsilon = epsilon_update(epsilon, eps_decay)
 
         tot_rewards.append(reward_per_ep)
 
-        mean_loss = np.mean(loss_per_ep) if loss_per_ep else 0.0
+        mean_loss = np.mean(loss_per_ep) if loss_per_ep else 0.0 #if the loss is not null then compute the mean
         tot_loss.append(mean_loss)
 
         if (episode + 1)%100 == 0 and tot_rewards:
             mean_reward = np.mean(tot_rewards[-100:])
-            win_rate = np.mean([r == 1 for r in tot_rewards]) * 100
+            win_rate = np.mean([r > 0 for r in tot_rewards]) * 100
             lose_rate = np.mean([r == -1 for r in tot_rewards]) * 100
+            draw_rate = np.mean([r == -1 for r in tot_rewards]) * 100
 
             win_rate_tot.append(win_rate)
             loss_rate_tot.append(lose_rate)
+            draw_rate_tot.append(draw_rate)
             
             print(f"Ep {episode+1:6d} | AvgReward: {mean_reward:+.3f} | "
-              f"WinRate: {win_rate:.1f}% | LoseRate: {lose_rate:.1f}% | Eps: {epsilon:.3f}")
+              f"WinRate: {win_rate:.1f}% | LoseRate: {lose_rate:.1f}% | DrawRate: {draw_rate:.1f}% | Eps: {epsilon:.3f}")
 
-    return q_network, tot_rewards, epsilon_per_episode, tot_loss, win_rate_tot, loss_rate_tot
+    return q_network, tot_rewards, epsilon_per_episode, tot_loss, win_rate_tot, loss_rate_tot, draw_rate_tot
 
 def run_policy(env, q_net, episodes = EPISODES_NUM):
     rewards = []
@@ -247,7 +242,7 @@ def plot_policy_reward(rewards, epsilons):
     ax1.tick_params(axis='y', labelcolor='black')
 
     ax2 = ax1.twinx()
-    ax2.plot(np.arange(len(epsilons)), epsilons, color='darkorange', label='Epsilon (Exploration)', linestyle='--')
+    ax2.plot(np.arange(len(epsilons)), epsilons, color='green', label='Epsilon (Exploration)', linestyle='--')
     ax2.set_ylabel('Epsilon', fontsize=12)
     ax2.tick_params(axis='y', labelcolor='black')
 
@@ -269,19 +264,19 @@ def plot_loss(tot_loss):
     plt.tight_layout()
     plt.show()
 
-def plot_training_stats(win_rate_history, lose_rate_history, stats_every):
-    episodes = np.arange(stats_every, stats_every * len(win_rate_history) + 1, stats_every)
+def plot_training_stats(win_rate_history, lose_rate_history, draw_rate_history):
+    episodes = np.arange(len(win_rate_history)) * 100  
 
     plt.figure(figsize=(12,6))
-    plt.plot(episodes, win_rate_history, label='Win Rate (%)', color='green', linewidth=2)
-    plt.plot(episodes, lose_rate_history, label='Lose Rate (%)', color='red', linewidth=2)
-    #plt.plot(episodes, avg_reward_history, label='Avg Reward', color='blue', linestyle='--')
+    plt.plot(episodes, win_rate_history, label="Win rate", color="green", linewidth=2)
+    plt.plot(episodes, lose_rate_history, label="Loss rate", color="red", linewidth=2)
+    plt.plot(episodes, draw_rate_history, label="Draw rate",color="deepskyblue", linewidth=2)
 
-    plt.title("Training Performance (Q-learning)", fontsize=14, fontweight='bold')
+    plt.title("Evolution of games outcomes during training ", fontsize=14)
     plt.xlabel("Episodes", fontsize=12)
-    plt.ylabel("Percentage / Reward", fontsize=12)
-    plt.legend()
-    plt.grid(alpha=0.3)
+    plt.ylabel("Percentage (%)", fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend(fontsize=12)
     plt.tight_layout()
     plt.show()
 
@@ -290,7 +285,7 @@ def plot_per_policy(rewards, policy):
     std = np.std(rewards)
     episodes = np.arange(len(smoothed))
 
-    plt.figure(figsize=(10,5))
+    plt.figure(figsize=(12,6))
     plt.plot(episodes, smoothed, label=f'{policy} (moving avg)', color='royalblue')
     plt.fill_between(episodes, smoothed-std, smoothed+std, color='blue', alpha=0.1)
     plt.axhline(y=np.mean(rewards), color='red', linestyle='--', label=f'Mean: {np.mean(rewards):.2f}')
@@ -325,22 +320,26 @@ def plot_hyperparameters_subplots(res1, res2, res3):
     results = [res1, res2, res3]
     titles = ['First', 'Second', 'Third']
     colors = ['royalblue', 'red', 'lime']
-
     step = 10
 
-    fig, axes = plt.subplots(3, 1, figsize=(12,10), sharex=True)
+    fig, axes = plt.subplots(3, 1, figsize=(12, 6), sharex=True)
+    
     for i, ax in enumerate(axes):
         avg = np.convolve(results[i], np.ones(window)/window, mode='valid')[::step]
-        ax.plot(avg, color=colors[i], linewidth=2)
+        mean_reward = np.mean(results[i])
+
+        ax.plot(avg, color=colors[i], linewidth=2, label='Smoothed Reward')
+        ax.axhline(mean_reward, color='gray', linestyle='--', linewidth=1.5, label=f'Mean = {mean_reward:.2f}')
+        
         ax.set_title(f'{titles[i]} hyperparameters')
         ax.grid(True, linestyle='--', alpha=0.5)
         ax.set_ylabel('Reward')
+        ax.legend()
 
     axes[-1].set_xlabel('Episodes')
     fig.suptitle('Reward trends per hyperparameter set', fontsize=14)
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 1, 0.96]) 
     plt.show()
-
 
 if __name__ == "__main__":
     env = gym.make('Blackjack-v1', natural=True, sab=False)
@@ -351,7 +350,7 @@ if __name__ == "__main__":
         policy_file = "default_dqn.pth"
 
     if mode == "0":
-        q_net, rewards, epsilon, loss, wins, losses = train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0, batch_size=64)
+        q_net, rewards, epsilon, loss, wins, losses, draws = train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0, batch_size=64)
         save_policy(q_net, policy_file)
         ran_rewards = random_episodes(env)
         avg_reward = np.mean(rewards)
@@ -359,9 +358,8 @@ if __name__ == "__main__":
         print(f"Random mean: {np.mean(ran_rewards):.2f}")
         plot_random_vs_greedy(ran_rewards, rewards, epsilon)
         plot_loss(loss)
-        plot_training_stats(wins, losses, 100)
+        plot_training_stats(wins, losses, draws)
         plot_policy_reward(rewards, epsilon)
-        #plot_training_stats(win, loss, 100)
     elif mode == "1":
         ran_rewards = random_episodes(env)
         state_dim = len(encode(env.reset()[0]))
@@ -374,11 +372,11 @@ if __name__ == "__main__":
         plot_per_policy(ran_rewards, 'Random')
         plot_per_policy(greedy_rewards, 'Greedy')
     elif mode == "2":
-        q1, r1, eps1, l1, _, _ = train_blackjack(env, episodes_num = 30000, gamma= 0.9999, eps_decay=0.9995, epsilon=1.0, batch_size=32)
+        q1, r1, eps1, l1, _, _, _ = train_blackjack(env, episodes_num = 30000, gamma= 0.9999, eps_decay=0.9995, epsilon=1.0, batch_size=64)
         save_policy(q1, "first_tuning.pth")
-        q2, r2, eps2, l2, _, _ = train_blackjack(env,  episodes_num = 30000, gamma= 0.999, eps_decay=0.999, epsilon=1.0, batch_size=32)
+        q2, r2, eps2, l2, _, _, _ = train_blackjack(env,  episodes_num = 30000, gamma= 0.999, eps_decay=0.999, epsilon=1.0, batch_size=64)
         save_policy(q2, "second_tuning.pth")
-        q3, r3, eps3, l3, _, _ = train_blackjack(env, episodes_num = 30000,  gamma= 0.99, eps_decay=0.99, epsilon=1.0, batch_size=32)
+        q3, r3, eps3, l3, _, _, _ = train_blackjack(env, episodes_num = 30000,  gamma= 0.99, eps_decay=0.9995, epsilon=1.0, batch_size=64)
         save_policy(q3, "third_tuning.pth")
         plot_hypeparameters(r1, r2, r3)
         plot_hyperparameters_subplots(r1, r2, r3)
