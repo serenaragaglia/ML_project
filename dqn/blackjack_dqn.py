@@ -9,7 +9,7 @@ import torch.optim as optim
 import os
 
 #hyperparameters
-EPISODES_NUM = 50000
+EPISODES_NUM = 100000
 ALPHA = 0.001
 GAMMA = 0.999
 MIN_EPS = 0.05
@@ -96,7 +96,7 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
     num_actions = env.action_space.n #number of actions: hit and stay
 
     q_network = DQN(state_dim, num_actions, device = "cpu")
-    replay_buffer = ReplayBuffer(capacity=10000)
+    replay_buffer = ReplayBuffer(capacity=100000)
 
     epsilon_per_episode = []
     tot_rewards = []
@@ -141,7 +141,7 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
             mean_reward = np.mean(tot_rewards[-100:])
             win_rate = np.mean([r > 0 for r in tot_rewards]) * 100
             lose_rate = np.mean([r == -1 for r in tot_rewards]) * 100
-            draw_rate = np.mean([r == -1 for r in tot_rewards]) * 100
+            draw_rate = np.mean([r == 0 for r in tot_rewards]) * 100
 
             win_rate_tot.append(win_rate)
             loss_rate_tot.append(lose_rate)
@@ -154,38 +154,50 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
 
 def run_policy(env, q_net, episodes = EPISODES_NUM):
     rewards = []
+    actions_per_ep = []
+
     for episode in range(episodes):
         state, _ = env.reset()
         finished = False
         total_reward = 0
+        actions = []
 
         while not finished:
             q_values = q_net.predict_q_value(encode(state))[0]
             action = int(np.argmax(q_values))
+            actions.append(action)
+
             next_state, reward, terminated, truncated, _ = env.step(action)
             finished = terminated or truncated
             state = next_state
             total_reward += reward
 
         rewards.append(total_reward)
-    return rewards
+        actions_per_ep.append(actions)
+    return rewards, actions_per_ep
 
-def random_episodes(env, episodes = EPISODES_NUM):
+def random_episodes(env):
     rewards = []
-    for episode in range(episodes):
+    actions_per_ep = []
+
+    for episode in range(EPISODES_NUM):
         state, _ = env.reset()
         finished = False
         total_reward = 0
+        actions = []
 
         while not finished:            
             action = env.action_space.sample()
+            actions.append(action)
             next_state, reward, terminated, truncated, _ = env.step(action)
             finished = terminated or truncated
             state = next_state
             total_reward += reward
 
         rewards.append(total_reward)
-    return rewards
+        actions_per_ep.append(actions)
+
+    return rewards, actions_per_ep
 
 def save_policy(q_network, filename, folder = "policies"):
     os.makedirs(folder, exist_ok=True)
@@ -296,6 +308,36 @@ def plot_per_policy(rewards, policy):
     plt.grid(True, alpha=0.3)
     plt.show()
 
+def plot_reward_action_trend(actions_per_episode, policy):
+
+    num_episodes = len(actions_per_episode)
+    
+    hit_freqs = []
+    stick_freqs = []
+    episode_labels = []
+    
+    for i in range(0, num_episodes, window):
+        batch = actions_per_episode[i:i+window]
+        flat_actions = [a for ep in batch for a in ep] #list with all actions within window episodes
+        if flat_actions:
+            hit_freq = np.mean([1 if a==1 else 0 for a in flat_actions])
+        else:
+            hit_freq = 0
+        hit_freqs.append(hit_freq)
+        stick_freqs.append(1 - hit_freq)
+        episode_labels.append(i + window//2)
+    
+    plt.figure(figsize=(12,6))
+    plt.plot(episode_labels, hit_freqs, label='Hit (1)', color='dodgerblue', marker='o', markersize=4)
+    plt.plot(episode_labels, stick_freqs, label='Stick (0)', color='midnightblue', marker='o', markersize=4)
+    
+    plt.xlabel('Episode')
+    plt.ylabel('Proportion of Actions')
+    plt.title(f'Distribution of Hit and Stick Actions Over Episodes for {policy} policy')
+    plt.legend()
+    plt.grid(alpha=0.3)
+    plt.show()
+
 def plot_hypeparameters(res1, res2, res3):
     step = 10  
 
@@ -352,25 +394,38 @@ if __name__ == "__main__":
     if mode == "0":
         q_net, rewards, epsilon, loss, wins, losses, draws = train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0, batch_size=64)
         save_policy(q_net, policy_file)
-        ran_rewards = random_episodes(env)
+        ran_rewards, _ = random_episodes(env)
         avg_reward = np.mean(rewards)
+
         print(f"Greedy mean: {np.mean(rewards):.2f}")
         print(f"Random mean: {np.mean(ran_rewards):.2f}")
+        print(f"Wins mean: {np.mean(wins):.2f}")
+        print(f"Draws mean: {np.mean(draws):.2f}")
+        print(f"Losses mean: {np.mean(losses):.2f}")
+
         plot_random_vs_greedy(ran_rewards, rewards, epsilon)
         plot_loss(loss)
+
         plot_training_stats(wins, losses, draws)
+
         plot_policy_reward(rewards, epsilon)
     elif mode == "1":
-        ran_rewards = random_episodes(env)
+        ran_rewards, ran_actions = random_episodes(env)
+
         state_dim = len(encode(env.reset()[0]))
         num_actions = env.action_space.n
+
         q_net = load_policy(state_dim, num_actions, policy_file)
-        greedy_rewards = run_policy(env, q_net, episodes=EPISODES_NUM)
+        greedy_rewards, optimal_actions = run_policy(env, q_net, episodes=EPISODES_NUM)
 
         print(f"\nMean greedy reward: {np.mean(greedy_rewards):.2f}")
         print(f"Mean random reward: {np.mean(ran_rewards):.2f}")
+
         plot_per_policy(ran_rewards, 'Random')
         plot_per_policy(greedy_rewards, 'Greedy')
+
+        plot_reward_action_trend(ran_actions, 'Random')
+        plot_reward_action_trend(optimal_actions, 'Greedy')
     elif mode == "2":
         q1, r1, eps1, l1, _, _, _ = train_blackjack(env, episodes_num = 30000, gamma= 0.9999, eps_decay=0.9995, epsilon=1.0, batch_size=64)
         save_policy(q1, "first_tuning.pth")
