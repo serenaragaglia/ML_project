@@ -37,17 +37,14 @@ def tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALP
     loss_rate_tot = []
     draw_rate_tot = []
 
-    actions_per_episode = []
 
     for episode in range(episodes_num):
         state, _ = env.reset()
         finished = False 
         total_reward = 0
-        actions = []
 
         while not finished:
             action = epsilon_greedy(state, epsilon, q_table, env)
-            actions.append(action)
 
             next_state, reward, terminated, truncated, _ = env.step(action)
             finished = terminated or truncated            
@@ -65,7 +62,6 @@ def tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALP
             state = next_state
         
         rewards_per_episode.append(total_reward)
-        actions_per_episode.append(actions)
 
         epsilon_per_episode.append(epsilon)
         epsilon = max(MIN_EPS, epsilon * eps_decay)
@@ -85,7 +81,7 @@ def tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALP
      
     save_policy(policy_file, q_table)
 
-    return np.array(rewards_per_episode), np.array(epsilon_per_episode), win_rate_tot, loss_rate_tot, draw_rate_tot, actions_per_episode
+    return np.array(rewards_per_episode), np.array(epsilon_per_episode), win_rate_tot, loss_rate_tot, draw_rate_tot
 
 def save_policy(policy_file, q_table):
     directory = "tabular_policies"
@@ -231,24 +227,34 @@ def plot_per_policy(rewards, policy):
     plt.grid(True, alpha=0.3)
     plt.show()
 
-def plot_reward_action_trend(actions, policy):
+def plot_reward_action_trend(actions_per_episode, policy):
 
-    hit_freq = [np.mean([1 if a==1 else 0 for a in ep]) for ep in actions]
-    stick_freq = [1 - h for h in hit_freq]
+    num_episodes = len(actions_per_episode)
     
-    hit_smooth = np.convolve(hit_freq, np.ones(window)/window, mode='valid')
-    stick_smooth = np.convolve(stick_freq, np.ones(window)/window, mode='valid')
+    hit_freqs = []
+    stick_freqs = []
+    episode_labels = []
     
-    episodes = np.arange(len(hit_smooth))
+    for i in range(0, num_episodes, window):
+        batch = actions_per_episode[i:i+window]
+        flat_actions = [a for ep in batch for a in ep] #list with all actions within window episodes
+        if flat_actions:
+            hit_freq = np.mean([1 if a==1 else 0 for a in flat_actions])
+        else:
+            hit_freq = 0
+        hit_freqs.append(hit_freq)
+        stick_freqs.append(1 - hit_freq)
+        episode_labels.append(i + window//2)
     
     plt.figure(figsize=(12,6))
-    plt.bar(episodes, stick_smooth, color='orange', label='Stick (0)')
-    plt.bar(episodes, hit_smooth, bottom=stick_smooth, color='blue', label='Hit (1)')
+    plt.plot(episode_labels, hit_freqs, label='Hit (1)', color='dodgerblue', marker='o', markersize=4)
+    plt.plot(episode_labels, stick_freqs, label='Stick (0)', color='midnightblue', marker='o', markersize=4)
     
-    plt.xlabel('Episodes')
-    plt.ylabel('Distribution')
-    plt.title(f'Hit vs. Stick Action Distribution for the {policy}-policy')
+    plt.xlabel('Episode')
+    plt.ylabel('Proportion of Actions')
+    plt.title(f'Distribution of Hit and Stick Actions Over Episodes for {policy} policy')
     plt.legend()
+    plt.grid(alpha=0.3)
     plt.show()
 
 def plot_hypeparameters(res1, res2, res3):
@@ -327,8 +333,8 @@ if __name__ == "__main__":
         #plot_per_policy(ran_rewards, 'Random')
         #plot_per_policy(greedy_rewards, 'Greedy')
 
-        plot_reward_action_trend(ran_rewards, ran_actions, 'Random')
-        plot_reward_action_trend(greedy_rewards, optimal_actions,'Greedy')
+        plot_reward_action_trend(ran_actions, 'Random')
+        plot_reward_action_trend(optimal_actions,'Greedy')
     elif mode == "2":
         r1, eps1, _, _, _ = tabular_qlearning(env, policy_file = ("tuning_first.pkl"), episodes_num = 30000, alpha=0.05, gamma= 0.9999, eps_decay=0.9995, epsilon=1.0)
         r2, eps2, _, _, _ = tabular_qlearning(env, policy_file = ("tuning_second.pkl"), episodes_num = 30000, alpha=0.05, gamma= 0.999, eps_decay=0.999, epsilon=1.0)
