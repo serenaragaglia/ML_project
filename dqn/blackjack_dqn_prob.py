@@ -9,7 +9,7 @@ import torch.optim as optim
 import os
 
 #hyperparameters
-EPISODES_NUM = 50000
+EPISODES_NUM = 30000
 ALPHA = 0.001
 GAMMA = 0.999
 MIN_EPS = 0.05
@@ -29,7 +29,13 @@ class ReplayBuffer:
     
     def __len__(self):
         return len(self.buffer)
-    
+
+# to turn Q-values into probabilities 
+def softmax (x, temperature=1.0):
+    x = np.array(x)
+    exp_x = np.exp((x - np.max(x)) / temperature)
+    return exp_x / np.sum(exp_x)
+
 class DQN(nn.Module):
     def __init__(self, state_dim, num_actions, device="cpu"):
         super().__init__()
@@ -67,14 +73,17 @@ def epsilon_update(epsilon, decay = EPS_DECAY):
 def encode(state):
     return np.array(state, dtype=np.float32)
 
-def next_action(state, env, epsilon, q_network :DQN ) :
+def next_action(state, env, epsilon, q_network :DQN, temperature=1.0, use_softmax=False) :
     n = random.random()
     if n < epsilon:
         return env.action_space.sample()
     else:
         q_values = q_network.predict_q_value(encode(state))[0]
-        action = int(np.argmax(q_values))
-        return action
+        if use_softmax:
+            probs = softmax(q_values, temperature)
+            return np.random.choice(len(q_values), p=probs)
+        else:
+            return int(np.argmax(q_values))
 
 def update_model(s, a, r, next_state, done, batch, q_network : DQN, gamma = GAMMA):
     training = []
@@ -91,7 +100,7 @@ def update_model(s, a, r, next_state, done, batch, q_network : DQN, gamma = GAMM
 
     return training
 
-def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0, batch_size = 32):
+def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0, batch_size = 64, use_softmax=False, temperature=1.0, temp_decay=0.999, min_temp=0.1):
     state_dim = len(encode(env.reset()[0])) #number of values that compose the state, so its dimension
     num_actions = env.action_space.n #number of actions: hit and stay
 
@@ -99,6 +108,7 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
     replay_buffer = ReplayBuffer(capacity=10000)
 
     epsilon_per_episode = []
+    temperature_per_episode = []
     tot_rewards = []
     tot_loss = []
 
@@ -113,7 +123,7 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
         loss_per_ep = []
 
         while not finished:
-            action = next_action(state, env, epsilon, q_network)
+            action = next_action(state, env, epsilon, q_network, temperature=temperature, use_softmax=use_softmax)
 
             next_state, reward, terminated, truncated, _ = env.step(action)
             finished = terminated or truncated
@@ -129,13 +139,18 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
 
             state = next_state   
 
-        epsilon_per_episode.append(epsilon)
-        epsilon = epsilon_update(epsilon, eps_decay)
-
         tot_rewards.append(reward_per_ep)
 
         mean_loss = np.mean(loss_per_ep) if loss_per_ep else 0.0 #if the loss is not null then compute the mean
         tot_loss.append(mean_loss)
+
+        if use_softmax:
+            temperature = max(min_temp, temperature * temp_decay)
+            temperature_per_episode.append(temperature)
+        else:
+            epsilon = epsilon_update(epsilon, eps_decay)
+            epsilon_per_episode.append(epsilon)
+
 
         if (episode + 1)%100 == 0 and tot_rewards:
             mean_reward = np.mean(tot_rewards[-100:])
@@ -147,12 +162,16 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
             loss_rate_tot.append(lose_rate)
             draw_rate_tot.append(draw_rate)
             
-            print(f"Ep {episode+1:6d} | AvgReward: {mean_reward:+.3f} | "
+            if use_softmax:
+                print(f"Ep {episode+1:6d} | AvgReward: {mean_reward:+.3f} | "
+              f"WinRate: {win_rate:.1f}% | LoseRate: {lose_rate:.1f}% | DrawRate: {draw_rate:.1f}% | Temp: {temperature:.3f}")
+            else:
+                print(f"Ep {episode+1:6d} | AvgReward: {mean_reward:+.3f} | "
               f"WinRate: {win_rate:.1f}% | LoseRate: {lose_rate:.1f}% | DrawRate: {draw_rate:.1f}% | Eps: {epsilon:.3f}")
 
-    return q_network, tot_rewards, epsilon_per_episode, tot_loss, win_rate_tot, loss_rate_tot, draw_rate_tot
+    return q_network, tot_rewards, epsilon_per_episode, tot_loss, win_rate_tot, loss_rate_tot, draw_rate_tot, temperature_per_episode
 
-def run_policy(env, q_net, episodes = EPISODES_NUM):
+def run_policy(env, q_net, episodes = EPISODES_NUM, temperature=1.0, use_softmax=False):
     rewards = []
     for episode in range(episodes):
         state, _ = env.reset()
@@ -161,7 +180,12 @@ def run_policy(env, q_net, episodes = EPISODES_NUM):
 
         while not finished:
             q_values = q_net.predict_q_value(encode(state))[0]
-            action = int(np.argmax(q_values))
+            if use_softmax:
+                probs = softmax(q_values, temperature)
+                action = np.random.choice(len(q_values), p=probs)
+            else:
+                action = int(np.argmax(q_values))
+
             next_state, reward, terminated, truncated, _ = env.step(action)
             finished = terminated or truncated
             state = next_state
@@ -206,12 +230,12 @@ def load_policy(state_dim, num_actions, filename, folder = "policies"):
 
     return q_network
 
-def plot_random_vs_greedy(random_rewards, greedy_rewards, epsilon):
-    avg_greedy = np.convolve(greedy_rewards, np.ones(window)/window, mode='valid')
+def plot_random_vs_trained(random_rewards, trained_rewards, epsilon, temperature):
+    avg_trained = np.convolve(trained_rewards, np.ones(window)/window, mode='valid')
     avg_random = np.convolve(random_rewards, np.ones(window)/window, mode='valid') 
 
     fig, ax1 = plt.subplots(figsize=(12,6))
-    ax1.plot(avg_greedy, label="Greedy (Q-learning)", color='royalblue', linewidth=2)
+    ax1.plot(avg_trained, label="Greedy (Q-learning)", color='royalblue', linewidth=2)
     ax1.plot(avg_random, label="Random", color='darkorange', linestyle='--', linewidth=2)
 
     ax1.set_xlabel("Episode", fontsize=12)
@@ -221,7 +245,7 @@ def plot_random_vs_greedy(random_rewards, greedy_rewards, epsilon):
     ax1.legend(loc='upper left')
 
     ax2 = ax1.twinx()
-    ax2.plot(epsilon[:len(avg_greedy)], label="Epsilon decay", color='green', linestyle=':', linewidth=2)
+    ax2.plot(epsilon[:len(avg_trained)], label="Epsilon decay", color='green', linestyle=':', linewidth=2)
     ax2.set_ylabel("Epsilon", fontsize=12)
     ax2.legend(loc='upper right')
 
@@ -350,13 +374,14 @@ if __name__ == "__main__":
         policy_file = "default_dqn.pth"
 
     if mode == "0":
-        q_net, rewards, epsilon, loss, wins, losses, draws = train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0, batch_size=32)
+        # q_net, rewards, epsilon, loss, wins, losses, draws, _ = train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0, batch_size=64)
+        q_net, rewards, epsilon, loss, wins, losses, draws, temp = train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0, batch_size=64, use_softmax=True, temperature=1.0, temp_decay=0.999)
         save_policy(q_net, policy_file)
         ran_rewards = random_episodes(env)
         avg_reward = np.mean(rewards)
-        print(f"Greedy mean: {np.mean(rewards):.2f}")
+        print(f"Trained mean: {np.mean(rewards):.2f}")
         print(f"Random mean: {np.mean(ran_rewards):.2f}")
-        plot_random_vs_greedy(ran_rewards, rewards, epsilon)
+        plot_random_vs_trained(ran_rewards, rewards, epsilon)
         plot_loss(loss)
         plot_training_stats(wins, losses, draws)
         plot_policy_reward(rewards, epsilon)
