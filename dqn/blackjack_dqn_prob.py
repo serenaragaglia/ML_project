@@ -15,6 +15,10 @@ GAMMA = 0.999
 MIN_EPS = 0.05
 EPS_DECAY = 0.999
 
+TAU_GROWTH = 0.9999 
+MAX_TAU = 200.0
+use_softmax =False
+
 window = 1000
 
 class ReplayBuffer:
@@ -30,9 +34,9 @@ class ReplayBuffer:
     def __len__(self):
         return len(self.buffer)
 
-def power_softmax(q_values, k=5.0):  # Compute P(a|s) = k^{Q(s,a)} / sum_a' k^{Q(s,a')}
+def power_softmax(q_values, tau=5.0):  # Compute P(a|s) = k^{Q(s,a)} / sum_a' k^{Q(s,a')}
     q_values = np.array(q_values)
-    powers = np.power(k, q_values - np.max(q_values))  # subtract max for numerical stability
+    powers = np.power(tau, q_values - np.max(q_values))  # subtract max for numerical stability
     return powers / np.sum(powers)
     
 class DQN(nn.Module):
@@ -40,7 +44,7 @@ class DQN(nn.Module):
         super().__init__()
         self.device = device
         self.model = nn.Sequential(
-            nn.Linear(state_dim, 64),
+            nn.Linear(state_dim, 64),   
             nn.ReLU(),
             nn.Linear(64, 64),
             nn.ReLU(),
@@ -72,11 +76,11 @@ def epsilon_update(epsilon, decay = EPS_DECAY):
 def encode(state):
     return np.array(state, dtype=np.float32)
 
-def next_action(state, env, epsilon, q_network :DQN, k=5.0, use_softmax=False) :
+def next_action(state, env, epsilon, q_network :DQN, tau=5.0, use_softmax=False) :
     q_values = q_network.predict_q_value(encode(state))[0]
 
     if use_softmax:
-        probs = power_softmax(q_values, k)
+        probs = power_softmax(q_values, tau)
         action = np.random.choice(len(probs), p=probs)
         return action
     else:
@@ -100,15 +104,15 @@ def update_model(s, a, r, next_state, done, batch, q_network : DQN, gamma = GAMM
 
     return training
 
-def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0, batch_size = 32, use_softmax=False, k=5.0, k_growth=1.001, k_max=100.0):
+def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0, batch_size = 64, use_softmax=False, tau = 5.0, tau_growth = TAU_GROWTH, max_tau = MAX_TAU):
     state_dim = len(encode(env.reset()[0])) #number of values that compose the state, so its dimension
     num_actions = env.action_space.n #number of actions: hit and stay
 
     q_network = DQN(state_dim, num_actions, device = "cpu")
-    replay_buffer = ReplayBuffer(capacity=100000)
+    replay_buffer = ReplayBuffer(capacity=10000)
 
     epsilon_per_episode = []
-    k_per_episode = []
+    tau_per_episode = []
     tot_rewards = []
     tot_loss = []
 
@@ -123,7 +127,7 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
         loss_per_ep = []
 
         while not finished:
-            action = next_action(state, env, epsilon, q_network, k, use_softmax)
+            action = next_action(state, env, epsilon, q_network, tau, use_softmax)
 
             next_state, reward, terminated, truncated, _ = env.step(action)
             finished = terminated or truncated
@@ -145,8 +149,8 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
         tot_loss.append(mean_loss)
 
         if use_softmax:
-            k = min(k * k_growth, k_max)
-            k_per_episode.append(k)
+            tau = min(tau * tau_growth, max_tau)
+            tau_per_episode.append(tau)
         else:
             epsilon_per_episode.append(epsilon)
             epsilon = epsilon_update(epsilon, eps_decay)
@@ -164,12 +168,12 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
             
             if use_softmax:
                 print(f"Ep {episode+1:6d} | AvgReward: {mean_reward:+.3f} | "
-              f"WinRate: {win_rate:.1f}% | LossRate: {lose_rate:.1f}% | DrawRate: {draw_rate:.1f}% | k: {k:.3f}")
+              f"WinRate: {win_rate:.1f}% | LossRate: {lose_rate:.1f}% | DrawRate: {draw_rate:.1f}% | Tau: {tau:.3f}")
             else:
                 print(f"Ep {episode+1:6d} | AvgReward: {mean_reward:+.3f} | "
               f"WinRate: {win_rate:.1f}% | LossRate: {lose_rate:.1f}% | DrawRate: {draw_rate:.1f}% | Eps: {epsilon:.3f}")
 
-    return q_network, tot_rewards, epsilon_per_episode, k_per_episode, tot_loss, win_rate_tot, loss_rate_tot, draw_rate_tot
+    return q_network, tot_rewards, epsilon_per_episode, tau_per_episode, tot_loss, win_rate_tot, loss_rate_tot, draw_rate_tot
 
 def run_policy(env, q_net, episodes = EPISODES_NUM):
     rewards = []
@@ -237,7 +241,7 @@ def load_policy(state_dim, num_actions, filename, folder = "policies"):
 
     return q_network
 
-def plot_random_vs_softmax(random_rewards, prob_rewards, k):
+def plot_comparison(random_rewards, prob_rewards, k):
     avg_prob = np.convolve(prob_rewards, np.ones(window)/window, mode='valid')
     avg_random = np.convolve(random_rewards, np.ones(window)/window, mode='valid') 
 
@@ -411,23 +415,28 @@ if __name__ == "__main__":
         policy_file = "default_dqn.pth"
 
     if mode == "0":
-        q_net, rewards, epsilon, k, loss, wins, losses, draws = train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0, batch_size=32, use_softmax=True, k=5.0, k_growth=1.002, k_max=200.0)
+        q_net, rewards, _, tau, loss, wins, losses, draws = train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0, batch_size=64, use_softmax=True)
+        q_net_greedy, rewards_greedy, epsilon, _, loss_greedy, wins_greedy, losses_greedy, draws_greedy = train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0, batch_size=64, use_softmax=False)
         save_policy(q_net, policy_file)
         ran_rewards, _ = random_episodes(env)
         avg_reward = np.mean(rewards)
+        avg_greedy_rewards = np.mean(rewards_greedy)
 
-        print(f"Softmax mean: {np.mean(rewards):.2f}")
+        print(f"Softmax mean: {avg_reward:.2f}")
+        prinf(f"Greedy mean: {avg_greedy_rewards:.2f}")
         print(f"Random mean: {np.mean(ran_rewards):.2f}")
         print(f"Wins mean: {np.mean(wins):.2f}")
         print(f"Draws mean: {np.mean(draws):.2f}")
         print(f"Losses mean: {np.mean(losses):.2f}")
 
-        plot_random_vs_softmax(ran_rewards, rewards, k)
+        plot_comparison(ran_rewards, rewards, tau)
+        plot_comparison(rewards, rewards_greedy, epsilon)
         plot_loss(loss)
 
         plot_training_stats(wins, losses, draws)
 
-        # plot_policy_reward(rewards, epsilon)
+        plot_policy_reward(rewards, tau)
+        plot_policy_reward(rewards_greedy, epsilon)
     elif mode == "1":
         ran_rewards, ran_actions = random_episodes(env)
 

@@ -330,8 +330,8 @@ if __name__ == "__main__":
         ran_rewards, ran_actions = random_episodes(env)
         greedy_rewards, optimal_actions = run_policy(env, policy_file)
 
-        #plot_per_policy(ran_rewards, 'Random')
-        #plot_per_policy(greedy_rewards, 'Greedy')
+        plot_per_policy(ran_rewards, 'Random')
+        plot_per_policy(greedy_rewards, 'Greedy')
 
         plot_reward_action_trend(ran_actions, 'Random')
         plot_reward_action_trend(optimal_actions,'Greedy')

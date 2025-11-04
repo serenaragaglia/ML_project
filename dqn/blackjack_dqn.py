@@ -92,8 +92,10 @@ def update_model(s, a, r, next_state, done, batch, q_network : DQN, gamma = GAMM
     return training
 
 def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay = EPS_DECAY, epsilon = 1.0, batch_size = 32):
-    state_dim = len(encode(env.reset()[0])) #number of values that compose the state, so its dimension
-    num_actions = env.action_space.n #number of actions: hit and stay
+    #number of values that compose the state, so its dimension
+    state_dim = len(encode(env.reset()[0])) 
+    #number of actions: hit and stay
+    num_actions = env.action_space.n 
 
     q_network = DQN(state_dim, num_actions, device = "cpu")
     replay_buffer = ReplayBuffer(capacity=100000)
@@ -119,7 +121,8 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
             finished = terminated or truncated
             reward_per_ep += reward
 
-            replay_buffer.add(state, action, reward, next_state, finished) #save inside replay buffer
+            #save inside replay buffer
+            replay_buffer.add(state, action, reward, next_state, finished) 
 
             if len(replay_buffer) >= batch_size:
                 batch = replay_buffer.sample(batch_size)
@@ -134,7 +137,8 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
 
         tot_rewards.append(reward_per_ep)
 
-        mean_loss = np.mean(loss_per_ep) if loss_per_ep else 0.0 #if the loss is not null then compute the mean
+        #if the loss is not null then compute the mean
+        mean_loss = np.mean(loss_per_ep) if loss_per_ep else 0.0 
         tot_loss.append(mean_loss)
 
         if (episode + 1)%100 == 0 and tot_rewards:
