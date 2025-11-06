@@ -51,14 +51,14 @@ class DQN(nn.Module):
         q_predictions = self.model(states) #forward pass: computes the network output from the batch
         loss = self.loss_fn(q_predictions, q_target)
         loss.backward()
-        self.optimizer.step()
+        self.optimizer.step()  #update weights
         return loss.item()
     
     def predict_q_value(self, state):
         state_input = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(self.device) #add new dimension to tensor in position 0
         with torch.no_grad():
             q_values = self.model(state_input)
-        return q_values.cpu().numpy()
+        return q_values.cpu().numpy() #return array of output q-values
     
 def epsilon_update(epsilon, decay = EPS_DECAY):
     epsilon = max(MIN_EPS, epsilon* decay)
@@ -76,7 +76,7 @@ def next_action(state, env, epsilon, q_network :DQN ) :
         action = int(np.argmax(q_values))
         return action
 
-def update_model(s, a, r, next_state, done, batch, q_network : DQN, gamma = GAMMA):
+def update_model(s, a, r, next_state, done, batch, q_network : DQN, gamma = GAMMA):  #creation of the batch
     training = []
     for(s, a, r, next_state, done) in batch:
         q_current_state = q_network.predict_q_value(encode(s))[0]  #current state prediction
@@ -98,7 +98,7 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
     num_actions = env.action_space.n 
 
     q_network = DQN(state_dim, num_actions, device = "cpu")
-    replay_buffer = ReplayBuffer(capacity=100000)
+    replay_buffer = ReplayBuffer(capacity=10000)
 
     epsilon_per_episode = []
     tot_rewards = []
@@ -123,6 +123,7 @@ def train_blackjack(env, episodes_num = EPISODES_NUM, gamma = GAMMA, eps_decay =
 
             #save inside replay buffer
             replay_buffer.add(state, action, reward, next_state, finished) 
+
 
             if len(replay_buffer) >= batch_size:
                 batch = replay_buffer.sample(batch_size)

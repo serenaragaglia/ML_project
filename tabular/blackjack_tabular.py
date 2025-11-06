@@ -13,8 +13,6 @@ GAMMA = 0.999
 MIN_EPS = 0.05
 EPS_DECAY = 0.999
 
-#https://gymnasium.farama.org/v0.26.3/tutorials/blackjack_tutorial/
-
 window = 1000
 
 #epsilon greedy policy
@@ -56,7 +54,7 @@ def tabular_qlearning(env, policy_file, episodes_num = EPISODES_NUM, alpha = ALP
             else: 
                 target = reward + gamma * q_table[next_state][best_action]
 
-            q_table[state][action] += alpha * (target - q_table[state][action])
+            q_table[state][action] += alpha * (target - q_table[state][action])  #update rule
 
             total_reward += reward
             state = next_state
